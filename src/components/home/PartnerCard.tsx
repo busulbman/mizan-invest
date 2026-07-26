@@ -13,6 +13,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { theme } from '@/theme';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { useLanguage } from '@/context/LanguageContext';
 
 // ============================================
 // TYPES
@@ -32,6 +33,8 @@ export interface PartnerCardProps {
 // ============================================
 
 export function PartnerCard({ name, country, listings, rating, logo, onPress }: PartnerCardProps) {
+  const { t } = useLanguage();
+
   return (
     <TouchableOpacity style={styles.container} activeOpacity={0.9} onPress={onPress}>
       <Image source={{ uri: logo }} style={styles.logo} />
@@ -55,7 +58,7 @@ export function PartnerCard({ name, country, listings, rating, logo, onPress }: 
         <View style={styles.footer}>
           <View style={styles.verifiedBadge}>
             <AppIcon name="verified" size="xs" color={theme.colors.success} />
-            <Text style={styles.verifiedText}>Verified</Text>
+            <Text style={styles.verifiedText}>{t('verified')}</Text>
           </View>
           <View style={styles.listingsContainer}>
             <AppIcon name="listings" size="xs" color={theme.colors.textLight} />

@@ -15,9 +15,14 @@
  * <AppIcon name="favorite" size="lg" color={theme.colors.accent} />
  */
 
+import { ComponentProps } from 'react';
+import { ColorValue, StyleProp, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { icons, iconSizes, IconName, IconSize } from '@/constants/icons';
 import { theme } from '@/theme';
+
+/** Icon names accepted by the underlying icon pack */
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 // ============================================
 // TYPES
@@ -31,10 +36,10 @@ export interface AppIconProps {
   size?: IconSize | number;
 
   /** Icon color - defaults to textDark */
-  color?: string;
+  color?: ColorValue;
 
   /** Additional style */
-  style?: object;
+  style?: StyleProp<TextStyle>;
 }
 
 // ============================================
@@ -47,12 +52,12 @@ export function AppIcon({
   color = theme.colors.textDark,
   style,
 }: AppIconProps) {
-  const iconName = icons[name];
+  const iconName: IoniconName = icons[name];
   const iconSize = typeof size === 'number' ? size : iconSizes[size];
 
   return (
     <Ionicons
-      name={iconName as any}
+      name={iconName}
       size={iconSize}
       color={color}
       style={style}

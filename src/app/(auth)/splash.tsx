@@ -26,12 +26,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { theme } from '@/theme';
-import { AppConfig } from '@/constants/config';
 import { LogoMark } from '@/components/ui/LogoMark';
+import { useLanguage } from '@/context/LanguageContext';
 
 const { height } = Dimensions.get('window');
 
 export default function SplashScreen() {
+  const { t, isRTL } = useLanguage();
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
@@ -86,14 +87,16 @@ export default function SplashScreen() {
             <Animated.View style={[styles.shimmerRing, shimmerStyle]} />
           </Animated.View>
 
-          {/* App name */}
+          {/* App name — wide letter spacing breaks Arabic ligatures, so drop it in RTL */}
           <Animated.View entering={FadeInDown.delay(400).duration(800)}>
-            <Text style={styles.appName}>{AppConfig.appName.toUpperCase()}</Text>
+            <Text style={[styles.appName, isRTL && styles.appNameRtl]}>
+              {isRTL ? t('appName') : t('appName').toUpperCase()}
+            </Text>
           </Animated.View>
 
           {/* Tagline */}
           <Animated.View entering={FadeInDown.delay(600).duration(800)}>
-            <Text style={styles.tagline}>{AppConfig.appSlogan}</Text>
+            <Text style={[styles.tagline, isRTL && styles.taglineRtl]}>{t('appSlogan')}</Text>
           </Animated.View>
         </View>
       </LinearGradient>
@@ -135,12 +138,20 @@ const styles = StyleSheet.create({
     letterSpacing: 6,
     marginBottom: theme.spacing.smd,
   },
+  appNameRtl: {
+    letterSpacing: 0,
+  },
   tagline: {
     fontSize: 15,
     color: theme.colors.accent,
     letterSpacing: 2,
     textTransform: 'uppercase',
     opacity: 0.8,
+    textAlign: 'center',
+  },
+  taglineRtl: {
+    letterSpacing: 0,
+    textTransform: 'none',
   },
   decorativeLines: {
     position: 'absolute',

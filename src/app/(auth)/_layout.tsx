@@ -14,7 +14,6 @@ export default function AuthLayout() {
       <Stack.Screen name="welcome" />
       <Stack.Screen name="investor-login" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="partner-login" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="partner-dashboard" options={{ animation: 'fade' }} />
     </Stack>
   );
 }

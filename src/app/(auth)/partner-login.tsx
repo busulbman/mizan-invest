@@ -42,7 +42,8 @@ export default function PartnerLoginScreen() {
 
   const handleLogin = () => {
     // TODO: Connect Firebase Authentication
-    router.push('/(auth)/partner-dashboard');
+    // `replace` so the dashboard is not stacked on top of the login form
+    router.replace('/(partner)/dashboard');
   };
 
   return (
@@ -74,7 +75,7 @@ export default function PartnerLoginScreen() {
 
             <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.header}>
               <View style={styles.proBadge}>
-                <Text style={styles.proBadgeText}>PARTNER PORTAL</Text>
+                <Text style={styles.proBadgeText}>{t('partnerPortalBadge')}</Text>
               </View>
               <LogoMark size="medium" />
               <Text style={styles.title}>{t('partnerWelcome')}</Text>
@@ -136,7 +137,7 @@ export default function PartnerLoginScreen() {
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.footer}>
-              <Text style={styles.footerText}>Not a partner yet?</Text>
+              <Text style={styles.footerText}>{t('notPartnerYet')}</Text>
               <TouchableOpacity style={styles.requestButton}>
                 <Text style={styles.requestButtonText}>{t('requestPartnerAccess')}</Text>
                 <AppIcon name="arrowForward" size="md" color={theme.colors.accent} />
@@ -179,10 +180,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.colors.overlay.light,
-  },
-  backArrow: {
-    fontSize: 20,
-    color: theme.colors.white,
   },
   header: {
     alignItems: 'center',
@@ -281,10 +278,6 @@ const styles = StyleSheet.create({
   },
   requestButtonText: {
     ...theme.typography.bodyBold,
-    color: theme.colors.accent,
-  },
-  requestArrow: {
-    fontSize: 16,
     color: theme.colors.accent,
   },
 });

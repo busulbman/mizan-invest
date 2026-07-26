@@ -96,18 +96,14 @@ export default function PropertyDetailScreen() {
   // Handle share
   const handleShare = () => {
     // TODO: Implement share functionality
-    Alert.alert('Share', 'Share functionality coming soon!');
+    Alert.alert(t('share'), t('featureComingSoon'));
   };
 
   // Handle contact partner
   const handleContactPartner = () => {
     // TODO: Lead Generation System
     // TODO: CRM Tracking
-    Alert.alert(
-      t('contactPartner'),
-      'Lead generation system will be connected here.',
-      [{ text: 'OK' }]
-    );
+    Alert.alert(t('contactPartner'), t('contactPartnerMessage'));
   };
 
   // Handle save property
@@ -119,13 +115,13 @@ export default function PropertyDetailScreen() {
   // Handle watch video
   const handleWatchVideo = () => {
     // TODO: Connect YouTube videos
-    Alert.alert('Video', 'Video player will be integrated here.');
+    Alert.alert(t('watchVideo'), t('featureComingSoon'));
   };
 
   // Handle view map
   const handleViewMap = () => {
     // TODO: Integrate Google Maps
-    Alert.alert('Map', 'Google Maps integration coming soon!');
+    Alert.alert(t('viewOnMap'), t('featureComingSoon'));
   };
 
   // Handle similar property press
@@ -288,11 +284,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.colors.overlay.light,
-  },
-  backIcon: {
-    fontSize: 20,
-    color: theme.colors.white,
-    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

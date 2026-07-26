@@ -127,7 +127,7 @@ export default function InvestorLoginScreen() {
 
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with</Text>
+                <Text style={styles.dividerText}>{t('orContinueWith')}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -180,10 +180,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.colors.overlay.light,
-  },
-  backArrow: {
-    fontSize: 20,
-    color: theme.colors.white,
   },
   header: {
     alignItems: 'center',

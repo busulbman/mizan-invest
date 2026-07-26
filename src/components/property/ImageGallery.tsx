@@ -26,6 +26,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { theme } from '@/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 const HERO_HEIGHT = 400;
@@ -46,6 +47,7 @@ export interface ImageGalleryProps {
 // ============================================
 
 export function ImageGallery({ images, verified = false, onImagePress }: ImageGalleryProps) {
+  const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
 
   const handleThumbnailPress = (index: number) => {
@@ -75,7 +77,7 @@ export function ImageGallery({ images, verified = false, onImagePress }: ImageGa
           <View style={styles.verifiedBadge}>
             <BlurView intensity={40} tint="dark" style={styles.verifiedBlur}>
               <Text style={styles.verifiedIcon}>✓</Text>
-              <Text style={styles.verifiedText}>Verified Property</Text>
+              <Text style={styles.verifiedText}>{t('verifiedProperty')}</Text>
             </BlurView>
           </View>
         )}
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   thumbnailOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(212, 180, 131, 0.2)',
   },
 });

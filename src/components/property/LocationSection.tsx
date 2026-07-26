@@ -81,7 +81,7 @@ export function LocationSection({ city, country, onViewMap }: LocationSectionPro
         <View style={styles.detailItem}>
           <AppIcon name="building" size="lg" color={theme.colors.accent} />
           <View>
-            <Text style={styles.detailLabel}>City</Text>
+            <Text style={styles.detailLabel}>{t('city')}</Text>
             <Text style={styles.detailValue}>{city}</Text>
           </View>
         </View>
@@ -89,7 +89,7 @@ export function LocationSection({ city, country, onViewMap }: LocationSectionPro
         <View style={styles.detailItem}>
           <AppIcon name="globe" size="lg" color={theme.colors.accent} />
           <View>
-            <Text style={styles.detailLabel}>Country</Text>
+            <Text style={styles.detailLabel}>{t('country')}</Text>
             <Text style={styles.detailValue}>{country}</Text>
           </View>
         </View>

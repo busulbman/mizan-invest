@@ -6,8 +6,12 @@
  * Main app bottom tab navigation.
  * Tabs: Home, Explore, Reels, News, Profile
  *
- * TODO: Implement actual tab navigation
- * TODO: Add badge counts for notifications
+ * DEPRECATED — no longer rendered.
+ * Real tab navigation now lives in src/app/(main)/_layout.tsx using
+ * Expo Router `Tabs`. This file is kept only as the reference layout
+ * for the Reels and News tabs, which return in a later phase.
+ *
+ * TODO: Delete once Reels and News are added to the Tabs layout
  */
 
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';

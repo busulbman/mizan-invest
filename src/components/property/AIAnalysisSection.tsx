@@ -157,7 +157,7 @@ export function AIAnalysisSection({ analysis }: AIAnalysisSectionProps) {
                 { color: getRiskLevelColor(analysis.riskLevel) },
               ]}
             >
-              {t(analysis.riskLevel as any)}
+              {t(analysis.riskLevel)}
             </Text>
           </View>
         </View>

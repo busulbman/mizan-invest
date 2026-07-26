@@ -28,19 +28,19 @@ const { width } = Dimensions.get('window');
 // Onboarding slide configuration
 const SLIDES_CONFIG = [
   {
-    badge: 'Verified Investments',
+    badgeKey: 'onboarding1Badge' as const,
     titleKey: 'onboarding1Title' as const,
     subtitleKey: 'onboarding1Subtitle' as const,
     image: Images.onboarding.slide1,
   },
   {
-    badge: 'AI Analysis',
+    badgeKey: 'onboarding2Badge' as const,
     titleKey: 'onboarding2Title' as const,
     subtitleKey: 'onboarding2Subtitle' as const,
     image: Images.onboarding.slide2,
   },
   {
-    badge: 'Trusted Partners',
+    badgeKey: 'onboarding3Badge' as const,
     titleKey: 'onboarding3Title' as const,
     subtitleKey: 'onboarding3Subtitle' as const,
     image: Images.onboarding.slide3,
@@ -88,7 +88,7 @@ export default function OnboardingScreen() {
           <OnboardingSlide
             title={t(item.titleKey)}
             subtitle={t(item.subtitleKey)}
-            badge={item.badge}
+            badge={t(item.badgeKey)}
             imageUrl={item.image}
           />
         )}
@@ -214,10 +214,5 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  arrowText: {
-    color: theme.colors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

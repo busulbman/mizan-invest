@@ -6,6 +6,9 @@
  * Placeholder screen for partner dashboard.
  * Shows demo stats and navigation.
  *
+ * Route: /(partner)/dashboard
+ *
+ * TODO: Replace the demo stats with real partner analytics
  * TODO: Build full partner dashboard
  * TODO: Add listing management
  * TODO: Add analytics
@@ -50,28 +53,28 @@ export default function PartnerDashboardScreen() {
               </LinearGradient>
             </View>
             <Text style={styles.title}>{t('partnerDashboard')}</Text>
-            <Text style={styles.subtitle}>Manage your listings and analytics</Text>
+            <Text style={styles.subtitle}>{t('partnerDashboardSubtitle')}</Text>
           </Animated.View>
 
           <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.statsSection}>
             <View style={styles.statsRow}>
               <BlurView intensity={20} tint="dark" style={styles.statCard}>
                 <Text style={styles.statValue}>24</Text>
-                <Text style={styles.statLabel}>Active Listings</Text>
+                <Text style={styles.statLabel}>{t('activeListings')}</Text>
               </BlurView>
               <BlurView intensity={20} tint="dark" style={styles.statCard}>
                 <Text style={styles.statValue}>1.2K</Text>
-                <Text style={styles.statLabel}>Views</Text>
+                <Text style={styles.statLabel}>{t('totalViews')}</Text>
               </BlurView>
             </View>
             <View style={styles.statsRow}>
               <BlurView intensity={20} tint="dark" style={styles.statCard}>
                 <Text style={styles.statValue}>89</Text>
-                <Text style={styles.statLabel}>Inquiries</Text>
+                <Text style={styles.statLabel}>{t('inquiries')}</Text>
               </BlurView>
               <BlurView intensity={20} tint="dark" style={styles.statCard}>
                 <Text style={[styles.statValue, styles.goldText]}>$2.4M</Text>
-                <Text style={styles.statLabel}>Total Value</Text>
+                <Text style={styles.statLabel}>{t('totalValue')}</Text>
               </BlurView>
             </View>
           </Animated.View>
@@ -88,7 +91,7 @@ export default function PartnerDashboardScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.primaryButtonGradient}
               >
-                <Text style={styles.primaryButtonText}>Add New Listing</Text>
+                <Text style={styles.primaryButtonText}>{t('addNewListing')}</Text>
               </LinearGradient>
             </TouchableOpacity>
 

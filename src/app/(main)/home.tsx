@@ -20,7 +20,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ImageBackground,
-  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,21 +38,18 @@ import {
   categories,
   aiInsights,
 } from '@/constants/mockData';
-import { LogoMark, SectionHeader, AppIcon } from '@/components/ui';
+import { LogoMark, SectionHeader, AppIcon, LanguageButton } from '@/components/ui';
 import { PropertyCard } from '@/components/home/PropertyCard';
 import { HighYieldCard } from '@/components/home/HighYieldCard';
 import { PartnerCard } from '@/components/home/PartnerCard';
 import { InsightCard } from '@/components/home/InsightCard';
 import { CategoryCard } from '@/components/home/CategoryCard';
-import { BottomNavigation } from '@/components/home/BottomNavigation';
 import { useLanguage } from '@/context/LanguageContext';
-
-const { width } = Dimensions.get('window');
+import { categoryNameKey, countryNameKey } from '@/constants/localizedData';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState('home');
   const [selectedCountry, setSelectedCountry] = useState('all');
 
   return (
@@ -75,6 +71,9 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={styles.headerRight}>
+            {/* Language switcher — available without leaving the Home tab */}
+            <LanguageButton />
+
             {/* TODO: Connect to notifications */}
             <TouchableOpacity style={styles.notificationButton}>
               <AppIcon name="notification" size="lg" color={theme.colors.textDark} />
@@ -147,7 +146,7 @@ export default function HomeScreen() {
                     selectedCountry === country.id && styles.countryNameActive,
                   ]}
                 >
-                  {country.name}
+                  {t(countryNameKey(country.id))}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -163,7 +162,7 @@ export default function HomeScreen() {
             {categories.map((category) => (
               <CategoryCard
                 key={category.id}
-                name={category.name}
+                name={t(categoryNameKey(category.id))}
                 icon={category.icon}
                 count={category.count}
               />
@@ -278,12 +277,6 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
       </ScrollView>
-
-      {/* ============================================ */}
-      {/* BOTTOM NAVIGATION */}
-      {/* TODO: Implement tab navigation */}
-      {/* ============================================ */}
-      <BottomNavigation activeTab={activeTab} onTabPress={setActiveTab} />
     </View>
   );
 }
@@ -297,7 +290,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 100,
+    paddingBottom: theme.spacing.section,
   },
 
   // Header
@@ -336,9 +329,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     position: 'relative',
-  },
-  notificationIcon: {
-    fontSize: 20,
   },
   notificationBadge: {
     position: 'absolute',
@@ -383,11 +373,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.accentOverlay.medium,
   },
-  heroBadgeIcon: {
-    fontSize: 12,
-    color: theme.colors.accent,
-    marginRight: 6,
-  },
   heroBadgeText: {
     ...theme.typography.label,
     color: theme.colors.accent,
@@ -418,11 +403,6 @@ const styles = StyleSheet.create({
   },
   heroButtonText: {
     ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  heroButtonArrow: {
-    fontSize: 16,
     fontWeight: '600',
     color: theme.colors.primary,
   },

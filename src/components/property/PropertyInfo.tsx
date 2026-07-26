@@ -13,7 +13,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { theme } from '@/theme';
-import { Property, formatPriceFull, getPropertyTypeLabel } from '@/constants/mockData';
+import { Property, formatPriceFull } from '@/constants/mockData';
+import { propertyTypeKey } from '@/constants/localizedData';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { useLanguage } from '@/context/LanguageContext';
 
 // ============================================
@@ -46,18 +48,32 @@ export function PropertyInfo({
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{property.title}</Text>
           <View style={styles.locationRow}>
-            <Text style={styles.locationIcon}>📍</Text>
+            <AppIcon name="location" size="xs" color={theme.colors.textLight} />
             <Text style={styles.location}>{property.location}</Text>
           </View>
         </View>
 
         {/* Action buttons */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton} onPress={onSharePress}>
-            <Text style={styles.actionIcon}>↗️</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={onSharePress}
+            accessibilityRole="button"
+            accessibilityLabel={t('share')}
+          >
+            <AppIcon name="share" size="md" color={theme.colors.textDark} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={onFavoritePress}>
-            <Text style={styles.actionIcon}>{isFavorite ? '❤️' : '🤍'}</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={onFavoritePress}
+            accessibilityRole="button"
+            accessibilityLabel={t('favorite')}
+          >
+            <AppIcon
+              name={isFavorite ? 'favoriteFilled' : 'favorite'}
+              size="md"
+              color={isFavorite ? theme.colors.error : theme.colors.textDark}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -66,7 +82,7 @@ export function PropertyInfo({
       <View style={styles.badgeRow}>
         <View style={styles.typeBadge}>
           <Text style={styles.typeBadgeText}>
-            {getPropertyTypeLabel(property.type)}
+            {t(propertyTypeKey(property.type))}
           </Text>
         </View>
         {property.status && (
@@ -79,7 +95,7 @@ export function PropertyInfo({
             ]}
           >
             <Text style={styles.statusText}>
-              {t(property.status as any) || property.status}
+              {t(property.status)}
             </Text>
           </View>
         )}
@@ -148,10 +164,7 @@ const styles = StyleSheet.create({
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  locationIcon: {
-    fontSize: 14,
-    marginRight: 4,
+    gap: 4,
   },
   location: {
     ...theme.typography.body,
@@ -171,9 +184,6 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-  },
-  actionIcon: {
-    fontSize: 20,
   },
   badgeRow: {
     flexDirection: 'row',

@@ -18,6 +18,7 @@ import { BlurView } from 'expo-blur';
 import { theme } from '@/theme';
 import { formatPrice } from '@/constants/mockData';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { useLanguage } from '@/context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.75;
@@ -53,6 +54,7 @@ export function PropertyCard({
   favorite = false,
   onPress,
 }: PropertyCardProps) {
+  const { t } = useLanguage();
   const [isFavorite, setIsFavorite] = useState(favorite);
 
   const handleFavorite = () => {
@@ -77,7 +79,7 @@ export function PropertyCard({
             {verified && (
               <BlurView intensity={30} tint="dark" style={styles.verifiedBadge}>
                 <AppIcon name="verified" size="xs" color={theme.colors.success} />
-                <Text style={styles.verifiedText}>Verified</Text>
+                <Text style={styles.verifiedText}>{t('verified')}</Text>
               </BlurView>
             )}
             <TouchableOpacity style={styles.favoriteButton} onPress={handleFavorite}>
@@ -102,7 +104,7 @@ export function PropertyCard({
             <View style={styles.footer}>
               <Text style={styles.price}>{formatPrice(price)}</Text>
               <View style={styles.roiContainer}>
-                <Text style={styles.roiLabel}>ROI</Text>
+                <Text style={styles.roiLabel}>{t('roi')}</Text>
                 <Text style={styles.roiValue}>{roi}%</Text>
               </View>
             </View>

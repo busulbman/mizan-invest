@@ -10,7 +10,7 @@
  * TODO: Remember last login method
  */
 
-import { View, Text, StyleSheet, Dimensions, ImageBackground, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,8 +21,6 @@ import { theme } from '@/theme';
 import { Images } from '@/constants/images';
 import { LogoMark, LanguageSelector, AppIcon } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
-
-const { width, height } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const { t } = useLanguage();
@@ -226,18 +224,11 @@ const styles = StyleSheet.create({
   partnerIcon: {
     backgroundColor: theme.colors.successOverlay.light,
   },
-  buttonIcon: {
-    fontSize: 18,
-  },
   glassButtonText: {
     flex: 1,
     ...theme.typography.bodyBold,
     color: theme.colors.white,
     letterSpacing: 0.2,
-  },
-  glassButtonArrow: {
-    fontSize: 18,
-    color: theme.colors.textOnDarkMuted,
   },
   exclusiveBadge: {
     backgroundColor: theme.colors.accent,
