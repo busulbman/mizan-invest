@@ -27,13 +27,15 @@ import { useTheme } from '@/context/ThemeContext';
 export interface VideoModalProps {
   visible: boolean;
   onClose: () => void;
-  /** Which bundled clip to play */
-  videoKey: LocalVideoKey;
+  /** Which bundled clip to play (used by the mock catalogue). */
+  videoKey?: LocalVideoKey;
+  /** A verified public remote URL (used by the Supabase catalogue). */
+  videoUrl?: string;
   title: string;
   subtitle?: string;
 }
 
-export function VideoModal({ visible, onClose, videoKey, title, subtitle }: VideoModalProps) {
+export function VideoModal({ visible, onClose, videoKey, videoUrl, title, subtitle }: VideoModalProps) {
   const { t } = useLanguage();
   const { typography } = useTheme();
   const insets = useSafeAreaInsets();
@@ -41,7 +43,8 @@ export function VideoModal({ visible, onClose, videoKey, title, subtitle }: Vide
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
 
-  const player = useVideoPlayer(LocalVideos[videoKey], (instance) => {
+  const source = videoUrl ?? (videoKey ? LocalVideos[videoKey] : null);
+  const player = useVideoPlayer(source, (instance) => {
     instance.loop = true;
     instance.muted = false;
   });

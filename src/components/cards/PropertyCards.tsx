@@ -32,6 +32,7 @@ import { cityNameKey, locationLabel, propertyTypeKey } from '@/constants/localiz
 import { useCurrency } from '@/context/CurrencyContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { formatListingPrice, type RemoteProperty } from '@/lib/properties';
 
 function openProperty(id: string) {
   router.push(`/(main)/property/${id}`);
@@ -181,6 +182,74 @@ export function PropertyRow({ property }: { property: Property }) {
           <View style={styles.rowMeta}>
             <Badge label={t(propertyTypeKey(property.type))} tone="neutral" small />
             <Badge label={formatROI(property.roi)} tone="success" icon="trendUp" small />
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// ============================================
+// REMOTE ROW — Explore's Supabase catalogue
+// ============================================
+
+/**
+ * Kept separate from `PropertyRow` while Home and Favorites still consume the
+ * mock-only `Property` shape. It deliberately does not use `useCurrency()`:
+ * remote listings display their own stored currency without a client-side FX
+ * conversion.
+ */
+export function RemotePropertyRow({ property }: { property: RemoteProperty }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { language, t } = useLanguage();
+  const details = [
+    property.partner.name,
+    `${property.features.bedrooms} ${t('bedrooms')}`,
+    `${property.features.bathrooms} ${t('bathrooms')}`,
+    property.features.area > 0 ? `${property.features.area.toLocaleString(language)} m²` : null,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join(' · ');
+
+  return (
+    <Pressable
+      onPress={() => openProperty(property.id)}
+      accessibilityRole="button"
+      accessibilityLabel={property.title}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      <RemoteImage uri={property.image} style={styles.rowImage} borderRadius={14} />
+
+      <View style={styles.rowBody}>
+        <View style={styles.rowHeader}>
+          <Text style={styles.rowTitle} numberOfLines={2} ellipsizeMode="tail">
+            {property.title}
+          </Text>
+          <FavoriteButton propertyId={property.id} variant="plain" size={32} />
+        </View>
+
+        <View style={styles.locationRow}>
+          <AppIcon name="location" size="xs" color={colors.textMuted} />
+          <Text style={styles.rowLocation} numberOfLines={1} ellipsizeMode="tail">
+            {property.city.name} / {property.country.name}
+          </Text>
+        </View>
+
+        <Text style={styles.rowDetails} numberOfLines={1} ellipsizeMode="tail">
+          {details}
+        </Text>
+
+        <View style={styles.rowFooter}>
+          <Text style={styles.rowPrice} numberOfLines={1} ellipsizeMode="tail">
+            {formatListingPrice(property.price, property.priceCurrency, language)}
+          </Text>
+          <View style={styles.rowMeta}>
+            {property.verified && <Badge label={t('verified')} tone="success" icon="verified" small />}
+            <Badge label={t(propertyTypeKey(property.type))} tone="neutral" small />
+            {property.roi !== null && (
+              <Badge label={formatROI(property.roi)} tone="success" icon="trendUp" small />
+            )}
           </View>
         </View>
       </View>
@@ -339,6 +408,12 @@ const useStyles = makeStyles((t) => {
       minWidth: 0,
       ...t.typography.caption,
       color: t.colors.textSecondary,
+    },
+    rowDetails: {
+      flexShrink: 1,
+      minWidth: 0,
+      ...t.typography.tiny,
+      color: t.colors.textMuted,
     },
     rowFooter: {
       flexDirection: 'row',

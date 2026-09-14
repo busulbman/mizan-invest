@@ -5,11 +5,9 @@
  *
  * Search and filter the whole catalogue.
  *
- * SEARCH actually matches — across the translated listing title, city,
- * country, partner name and property type. Because titles are stored as
- * translation keys, matching runs against the *rendered* text, so typing
- * "Медина" finds the Madinah listings while the app is in Russian and
- * "Madinah" finds them in English.
+ * SEARCH matches remote title, city, country, partner and property type. The
+ * data layer already resolves each remote translation for the active language
+ * (and falls back to English), so searching works against the text on screen.
  *
  * FILTERS open in a bottom sheet (country, city, type, price band,
  * verified partners, minimum investment score) and the active count is
@@ -20,8 +18,8 @@
  * `verified`) and pre-apply the matching filter.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -33,31 +31,29 @@ import {
   Chip,
   SheetOption,
 } from '@/components/ui';
-import { PropertyRow } from '@/components/cards';
+import { RemotePropertyRow } from '@/components/cards';
+import { PropertyType } from '@/constants/mockData';
 import {
-  CityId,
-  PropertyType,
-  cities,
-  countries,
-  getPartnerById,
-  properties,
-} from '@/constants/mockData';
-import {
-  cityNameKey,
   countryNameKey,
   propertyTypePluralKey,
 } from '@/constants/localizedData';
-import { useCurrency } from '@/context/CurrencyContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTabReselect } from '@/context/TabRefreshContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import {
+  filterAndSortRemoteProperties,
+  getPublishedProperties,
+  type RemoteProperty,
+  type RemotePropertySort,
+} from '@/lib/properties';
 
 /**
- * Price bands in USD.
+ * Price bands use the database's derived USD comparison value.
  *
  * Bands rather than a slider: a slider would need another dependency and
- * would have to be re-scaled every time the display currency changes.
- * Bands convert cleanly and read well in all four languages.
+ * would have to be re-scaled every time the display currency changes. Listing
+ * cards still render the actual listing currency and never use these bands as
+ * a display conversion.
  */
 const PRICE_BANDS = [
   { id: 'any', min: 0, max: Infinity },
@@ -70,12 +66,36 @@ const PRICE_BANDS = [
 type PriceBandId = (typeof PRICE_BANDS)[number]['id'];
 
 const SCORE_STEPS = [0, 85, 90, 93] as const;
+const ROOM_STEPS = [0, 1, 2, 3, 4] as const;
+const PROPERTY_TYPES: PropertyType[] = ['apartment', 'villa', 'land', 'commercial'];
+
+export type SelectedCountryCode = 'sa' | 'ae' | null;
+
+interface ExploreContentProps {
+  /** Reserved for the upcoming global market selector. Null means all markets. */
+  selectedCountryCode?: SelectedCountryCode;
+}
+
+function isPropertyType(value: string | undefined): value is PropertyType {
+  return value !== undefined && PROPERTY_TYPES.includes(value as PropertyType);
+}
+
+function formatUsdFilterPrice(value: number): string {
+  return `USD ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)}`;
+}
+
+function remotePropertyKey(property: RemoteProperty): string {
+  return property.id;
+}
 
 export default function ExploreScreen() {
+  return <ExploreContent />;
+}
+
+export function ExploreContent({ selectedCountryCode = null }: ExploreContentProps) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { t } = useLanguage();
-  const { price, priceFull } = useCurrency();
+  const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams<{
@@ -87,56 +107,136 @@ export default function ExploreScreen() {
 
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const listRef = useRef<FlatList<RemoteProperty>>(null);
+  const requestId = useRef(0);
+
+  const [remoteProperties, setRemoteProperties] = useState<RemoteProperty[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useTabReselect('explore', useCallback(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []));
 
   const [country, setCountry] = useState<string>(params.country ?? 'all');
-  const [city, setCity] = useState<CityId | 'all'>((params.city as CityId) ?? 'all');
-  const [type, setType] = useState<PropertyType | 'all'>((params.type as PropertyType) ?? 'all');
+  const [city, setCity] = useState<string>(params.city ?? 'all');
+  const [type, setType] = useState<PropertyType | 'all'>(
+    isPropertyType(params.type) ? params.type : 'all',
+  );
   const [band, setBand] = useState<PriceBandId>('any');
   const [verifiedOnly, setVerifiedOnly] = useState(params.verified === '1');
   const [minScore, setMinScore] = useState<number>(0);
+  const [minBedrooms, setMinBedrooms] = useState<number>(0);
+  const [minBathrooms, setMinBathrooms] = useState<number>(0);
+  const sort: RemotePropertySort = 'recommended';
+
+  const loadProperties = useCallback(async (isPullToRefresh = false) => {
+    const currentRequest = ++requestId.current;
+
+    if (isPullToRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setLoadError(null);
+
+    try {
+      const data = await getPublishedProperties(language);
+      if (requestId.current === currentRequest) {
+        setRemoteProperties(data);
+      }
+    } catch (error) {
+      if (requestId.current === currentRequest) {
+        setLoadError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      if (requestId.current === currentRequest) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [language]);
+
+  useEffect(() => {
+    void loadProperties();
+
+    return () => {
+      requestId.current += 1;
+    };
+  }, [loadProperties]);
+
+  const effectiveCountryCode = selectedCountryCode ?? (country === 'all' ? null : country);
 
   const activeFilterCount =
-    (country !== 'all' ? 1 : 0) +
+    (selectedCountryCode === null && country !== 'all' ? 1 : 0) +
     (city !== 'all' ? 1 : 0) +
     (type !== 'all' ? 1 : 0) +
     (band !== 'any' ? 1 : 0) +
     (verifiedOnly ? 1 : 0) +
-    (minScore > 0 ? 1 : 0);
+    (minScore > 0 ? 1 : 0) +
+    (minBedrooms > 0 ? 1 : 0) +
+    (minBathrooms > 0 ? 1 : 0);
 
   const results = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const selectedBand = PRICE_BANDS.find((item) => item.id === band) ?? PRICE_BANDS[0];
 
-    return properties.filter((property) => {
-      if (country !== 'all' && property.countryCode !== country) return false;
-      if (city !== 'all' && property.cityId !== city) return false;
-      if (type !== 'all' && property.type !== type) return false;
-      if (verifiedOnly && !property.verified) return false;
-      if (property.investmentScore < minScore) return false;
-      if (property.price < selectedBand.min || property.price > selectedBand.max) return false;
+    return filterAndSortRemoteProperties(
+      remoteProperties,
+      {
+        countryCode: effectiveCountryCode,
+        citySlug: city === 'all' ? null : city,
+        propertyType: type === 'all' ? null : type,
+        minPriceUsd: selectedBand.min,
+        maxPriceUsd: selectedBand.max === Infinity ? null : selectedBand.max,
+        minBedrooms,
+        minBathrooms,
+        verifiedOnly,
+        minInvestmentScore: minScore,
+        search: query,
+      },
+      sort,
+    );
+  }, [
+    band,
+    city,
+    effectiveCountryCode,
+    minBathrooms,
+    minBedrooms,
+    minScore,
+    query,
+    remoteProperties,
+    sort,
+    type,
+    verifiedOnly,
+  ]);
 
-      if (needle.length === 0) return true;
-
-      // Match the text the user can actually see, in the active language
-      const partner = getPartnerById(property.partnerId);
-      const haystack = [
-        t(property.titleKey),
-        t(cityNameKey(property.cityId)),
-        t(countryNameKey(property.countryCode)),
-        t(propertyTypePluralKey(property.type)),
-        partner?.name ?? '',
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      return haystack.includes(needle);
+  const marketOptions = useMemo(() => {
+    const markets = new Map<string, { code: string; name: string; flag: string | null }>();
+    remoteProperties.forEach((property) => {
+      markets.set(property.country.code, {
+        code: property.country.code,
+        name: property.country.name,
+        flag: property.country.flag,
+      });
     });
-  }, [query, country, city, type, band, verifiedOnly, minScore, t]);
+
+    return [
+      { code: 'all', name: t(countryNameKey('all')), flag: '🌍' },
+      ...Array.from(markets.values()).sort((left, right) => left.name.localeCompare(right.name, language)),
+    ];
+  }, [language, remoteProperties, t]);
+
+  const cityOptions = useMemo(() => {
+    const cities = new Map<string, { slug: string; name: string }>();
+    remoteProperties.forEach((property) => {
+      if (!effectiveCountryCode || property.country.code === effectiveCountryCode) {
+        cities.set(property.city.slug, { slug: property.city.slug, name: property.city.name });
+      }
+    });
+
+    return Array.from(cities.values()).sort((left, right) => left.name.localeCompare(right.name, language));
+  }, [effectiveCountryCode, language, remoteProperties]);
 
   const resetFilters = () => {
     setCountry('all');
@@ -145,18 +245,85 @@ export default function ExploreScreen() {
     setBand('any');
     setVerifiedOnly(false);
     setMinScore(0);
+    setMinBedrooms(0);
+    setMinBathrooms(0);
   };
 
   const bandLabel = (id: PriceBandId) => {
     const item = PRICE_BANDS.find((entry) => entry.id === id);
     if (!item || id === 'any') return t('anyValue');
-    if (item.max === Infinity) return `${price(item.min)}+`;
-    if (item.min === 0) return `${t('upTo')} ${price(item.max)}`;
-    return `${price(item.min)} – ${price(item.max)}`;
+    if (item.max === Infinity) return `${formatUsdFilterPrice(item.min)}+`;
+    if (item.min === 0) return `${t('upTo')} ${formatUsdFilterPrice(item.max)}`;
+    return `${formatUsdFilterPrice(item.min)} – ${formatUsdFilterPrice(item.max)}`;
   };
 
-  // Cities offered in the sheet follow the selected country
-  const cityOptions = cities.filter((item) => country === 'all' || item.countryCode === country);
+  const renderRemoteProperty = useCallback(
+    ({ item }: { item: RemoteProperty }) => (
+      <View style={styles.list}>
+        <Animated.View entering={FadeInDown}>
+          <RemotePropertyRow property={item} />
+        </Animated.View>
+      </View>
+    ),
+    [styles.list],
+  );
+
+  const renderEmpty = useCallback(() => {
+    if (isLoading) {
+      return (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={styles.emptyTitle}>{t('loading')}</Text>
+        </View>
+      );
+    }
+
+    if (loadError) {
+      return (
+        <View style={styles.empty}>
+          <View style={styles.emptyIcon}>
+            <AppIcon name="error" size="xl" color={colors.textMuted} />
+          </View>
+          <Text style={styles.emptyTitle} numberOfLines={2}>
+            {t('networkError')}
+          </Text>
+          <Button
+            title={t('tryAgain')}
+            onPress={() => void loadProperties()}
+            variant="secondary"
+            size="md"
+            fullWidth={false}
+            style={styles.emptyButton}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.empty}>
+        <View style={styles.emptyIcon}>
+          <AppIcon name="search" size="xl" color={colors.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle} numberOfLines={2}>
+          {t('noResults')}
+        </Text>
+        <Text style={styles.emptyBody} numberOfLines={3}>
+          {t('noResultsSubtitle')}
+        </Text>
+        <Button
+          title={t('resetFilters')}
+          onPress={() => {
+            resetFilters();
+            setQuery('');
+          }}
+          variant="secondary"
+          size="md"
+          fullWidth={false}
+          style={styles.emptyButton}
+        />
+      </View>
+    );
+  }, [colors.accent, colors.textMuted, isLoading, loadError, loadProperties, styles, t]);
 
   return (
     <View style={styles.container}>
@@ -220,84 +387,62 @@ export default function ExploreScreen() {
         </View>
       </Animated.View>
 
-      <ScrollView
-        ref={scrollRef}
+      <FlatList
+        ref={listRef}
+        data={results}
+        renderItem={renderRemoteProperty}
+        keyExtractor={remotePropertyKey}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-      >
-        {/* Country quick filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {countries.map((item) => (
-            <Chip
-              key={item.id}
-              label={t(countryNameKey(item.id))}
-              leading={item.flag}
-              active={country === item.id}
-              onPress={() => {
-                setCountry(item.id);
-                // A city from another country would zero the results
-                setCity('all');
-              }}
-            />
-          ))}
-        </ScrollView>
-
-        <View style={styles.countRow}>
-          <Text style={styles.countText} numberOfLines={1}>
-            {results.length}{' '}
-            {results.length === 1 ? t('propertyFound') : t('propertiesFound')}
-          </Text>
-          {activeFilterCount > 0 && (
-            <Pressable onPress={resetFilters} hitSlop={8} accessibilityRole="button">
-              <Text style={styles.resetText} numberOfLines={1}>
-                {t('resetFilters')}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-
-        {results.length > 0 ? (
-          <View style={styles.list}>
-            {results.map((property, index) => (
-              <Animated.View
-                key={property.id}
-                entering={FadeInDown.delay(Math.min(index, 6) * 45)}
+        refreshing={isRefreshing}
+        onRefresh={() => void loadProperties(true)}
+        ListHeaderComponent={
+          <>
+            {selectedCountryCode === null && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
               >
-                <PropertyRow property={property} />
-              </Animated.View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <AppIcon name="search" size="xl" color={colors.textMuted} />
+                {marketOptions.map((item) => (
+                  <Chip
+                    key={item.code}
+                    label={item.name}
+                    leading={item.flag ?? undefined}
+                    active={country === item.code}
+                    onPress={() => {
+                      setCountry(item.code);
+                      // A city from another country would zero the results.
+                      setCity('all');
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={styles.countRow}>
+              <Text style={styles.countText} numberOfLines={1}>
+                {results.length} {results.length === 1 ? t('propertyFound') : t('propertiesFound')}
+              </Text>
+              {activeFilterCount > 0 && (
+                <Pressable onPress={resetFilters} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.resetText} numberOfLines={1}>
+                    {t('resetFilters')}
+                  </Text>
+                </Pressable>
+              )}
             </View>
-            <Text style={styles.emptyTitle} numberOfLines={2}>
-              {t('noResults')}
-            </Text>
-            <Text style={styles.emptyBody} numberOfLines={3}>
-              {t('noResultsSubtitle')}
-            </Text>
-            <Button
-              title={t('resetFilters')}
-              onPress={() => {
-                resetFilters();
-                setQuery('');
-              }}
-              variant="secondary"
-              size="md"
-              fullWidth={false}
-              style={styles.emptyButton}
-            />
-          </View>
-        )}
-      </ScrollView>
+          </>
+        }
+        ListEmptyComponent={renderEmpty}
+        // Reserved for a page-loading indicator when server pagination is added.
+        ListFooterComponent={<View style={styles.listFooter} />}
+      />
 
       {/* ---------------------------------------- */}
       {/* FILTER SHEET */}
@@ -326,23 +471,27 @@ export default function ExploreScreen() {
           </View>
         }
       >
-        {/* Country */}
-        <Text style={styles.groupLabel}>{t('countryFilter')}</Text>
-        <View style={styles.wrapRow}>
-          {countries.map((item) => (
-            <Chip
-              key={item.id}
-              label={t(countryNameKey(item.id))}
-              leading={item.flag}
-              active={country === item.id}
-              onPress={() => {
-                setCountry(item.id);
-                setCity('all');
-              }}
-              style={styles.wrapChip}
-            />
-          ))}
-        </View>
+        {/* Country remains local only until a global market selector owns it. */}
+        {selectedCountryCode === null && (
+          <>
+            <Text style={styles.groupLabel}>{t('countryFilter')}</Text>
+            <View style={styles.wrapRow}>
+              {marketOptions.map((item) => (
+                <Chip
+                  key={item.code}
+                  label={item.name}
+                  leading={item.flag ?? undefined}
+                  active={country === item.code}
+                  onPress={() => {
+                    setCountry(item.code);
+                    setCity('all');
+                  }}
+                  style={styles.wrapChip}
+                />
+              ))}
+            </View>
+          </>
+        )}
 
         {/* City */}
         <Text style={styles.groupLabel}>{t('cityFilter')}</Text>
@@ -355,10 +504,10 @@ export default function ExploreScreen() {
           />
           {cityOptions.map((item) => (
             <Chip
-              key={item.id}
-              label={t(cityNameKey(item.id))}
-              active={city === item.id}
-              onPress={() => setCity(item.id)}
+              key={item.slug}
+              label={item.name}
+              active={city === item.slug}
+              onPress={() => setCity(item.slug)}
               style={styles.wrapChip}
             />
           ))}
@@ -373,7 +522,7 @@ export default function ExploreScreen() {
             onPress={() => setType('all')}
             style={styles.wrapChip}
           />
-          {(['apartment', 'villa', 'land', 'commercial'] as PropertyType[]).map((item) => (
+          {PROPERTY_TYPES.map((item) => (
             <Chip
               key={item}
               label={t(propertyTypePluralKey(item))}
@@ -384,9 +533,9 @@ export default function ExploreScreen() {
           ))}
         </View>
 
-        {/* Price band — labelled in the active display currency */}
+        {/* Price bands use the database's USD comparison value. */}
         <Text style={styles.groupLabel}>
-          {t('priceRange')} · {t('demoExchangeRate')}
+          {t('priceRange')} · USD
         </Text>
         {PRICE_BANDS.map((item) => (
           <SheetOption
@@ -396,6 +545,34 @@ export default function ExploreScreen() {
             onPress={() => setBand(item.id)}
           />
         ))}
+
+        {/* Minimum bedrooms */}
+        <Text style={styles.groupLabel}>{t('bedrooms')}</Text>
+        <View style={styles.wrapRow}>
+          {ROOM_STEPS.map((step) => (
+            <Chip
+              key={step}
+              label={step === 0 ? t('anyValue') : `${step}+`}
+              active={minBedrooms === step}
+              onPress={() => setMinBedrooms(step)}
+              style={styles.wrapChip}
+            />
+          ))}
+        </View>
+
+        {/* Minimum bathrooms */}
+        <Text style={styles.groupLabel}>{t('bathrooms')}</Text>
+        <View style={styles.wrapRow}>
+          {ROOM_STEPS.map((step) => (
+            <Chip
+              key={step}
+              label={step === 0 ? t('anyValue') : `${step}+`}
+              active={minBathrooms === step}
+              onPress={() => setMinBathrooms(step)}
+              style={styles.wrapChip}
+            />
+          ))}
+        </View>
 
         {/* Investment score */}
         <Text style={styles.groupLabel}>{t('minInvestmentScore')}</Text>
@@ -430,11 +607,6 @@ export default function ExploreScreen() {
             <View style={[styles.knob, verifiedOnly && styles.knobOn]} />
           </View>
         </Pressable>
-
-        {/* Currency reminder — the bands above are shown converted */}
-        <Text style={styles.sheetNote} numberOfLines={2}>
-          {t('demoRateNote')} {priceFull(1_000_000)}
-        </Text>
       </BottomSheet>
     </View>
   );
@@ -551,6 +723,9 @@ const useStyles = makeStyles((t) => ({
   },
   list: {
     paddingHorizontal: t.spacing.screenHorizontal,
+  },
+  listFooter: {
+    height: t.spacing.smd,
   },
 
   empty: {

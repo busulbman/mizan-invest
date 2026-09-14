@@ -7,7 +7,7 @@
  */
 
 export { FavoriteButton } from './FavoriteButton';
-export { PropertyCompactCard, PropertyPosterCard, PropertyRow } from './PropertyCards';
+export { PropertyCompactCard, PropertyPosterCard, PropertyRow, RemotePropertyRow } from './PropertyCards';
 export { CategoryCard, CityCard, InsightCard, PartnerCard } from './MiscCards';
 
 export type { FavoriteButtonProps } from './FavoriteButton';

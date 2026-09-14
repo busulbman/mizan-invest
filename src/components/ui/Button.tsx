@@ -192,6 +192,7 @@ export interface IconButtonProps {
   variant?: 'surface' | 'ghost' | 'glass' | 'accent';
   size?: number;
   color?: string;
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -202,6 +203,7 @@ export function IconButton({
   variant = 'surface',
   size = 44,
   color,
+  disabled = false,
   style,
 }: IconButtonProps) {
   const styles = useStyles();
@@ -218,6 +220,7 @@ export function IconButton({
     { width: size, height: size, borderRadius: size / 2 },
     variant === 'surface' && styles.iconSurface,
     variant === 'accent' && styles.iconAccent,
+    disabled && styles.disabled,
     style,
   ];
 
@@ -225,8 +228,10 @@ export function IconButton({
     return (
       <Pressable
         onPress={onPress}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ disabled }}
         hitSlop={8}
         style={({ pressed }) => [shell, styles.iconGlass, pressed && styles.pressed]}
       >
@@ -240,8 +245,10 @@ export function IconButton({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
       hitSlop={8}
       style={({ pressed }) => [shell, pressed && styles.pressed]}
     >

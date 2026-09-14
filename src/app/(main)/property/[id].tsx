@@ -1,90 +1,118 @@
-/**
- * ============================================
- * PROPERTY DETAIL
- * ============================================
- *
- * The most important screen in the app. Section order is fixed and
- * deliberate — it walks an investor from "what is it" to "can I trust
- * it" to "how do I act":
- *
- *   1  photo gallery (tap → full-screen, zoomable)
- *   2  title, location, price
- *   3  key figures
- *   4  investment score
- *   5  description
- *   6  why invest here
- *   7  features
- *   8  project video
- *   9  location
- *  10  verified partner
- *  11  similar listings
- *  12  sticky CTA (WhatsApp · call · interested)
- *
- * The floating back button sits below the safe-area inset so it clears
- * the Dynamic Island, and the scroll content reserves room for the
- * sticky bar so the last section is never hidden behind it.
- *
- * TODO: Connect to the listings API
- * TODO: Lead generation + CRM tracking behind "I'm interested"
- */
+/** Remote Supabase-backed property detail. */
 
-import { useMemo } from 'react';
-import { Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { IconButton } from '@/components/ui';
 import { FavoriteButton } from '@/components/cards/FavoriteButton';
 import {
   BottomCTA,
-  DescriptionSection,
-  FeaturesSection,
   ImageGallery,
-  InvestmentScoreCard,
-  KeyFigures,
-  LocationSection,
-  PartnerSection,
-  PropertyHeader,
-  PropertyNotFound,
-  SimilarSection,
-  VideoSection,
-  WhyInvestSection,
+  RemoteDescriptionSection,
+  RemoteFeaturesSection,
+  RemoteHighlightsSection,
+  RemoteInvestmentMetrics,
+  RemoteKeyFigures,
+  RemoteLocationSection,
+  RemotePartnerSection,
+  RemotePropertyHeader,
+  RemoteVideoSection,
 } from '@/components/property';
-import { getPartnerById, getPropertyById, getSimilarProperties } from '@/constants/mockData';
+import { AppIcon, Button, IconButton } from '@/components/ui';
 import { AppConfig } from '@/constants/config';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { getPropertyById, RemoteProperty } from '@/lib/properties';
+
+type DetailStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
 export default function PropertyDetailScreen() {
   const styles = useStyles();
-  const { isDark } = useTheme();
-  const { t } = useLanguage();
+  const { language, t, isReady: isLanguageReady } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const [property, setProperty] = useState<RemoteProperty | null>(null);
+  const [status, setStatus] = useState<DetailStatus>('loading');
 
-  const property = useMemo(() => getPropertyById(id ?? ''), [id]);
-  const similar = useMemo(
-    () => (property ? getSimilarProperties(property, 6) : []),
-    [property]
-  );
+  const loadProperty = useCallback(async () => {
+    if (!id) {
+      setProperty(null);
+      setStatus('not-found');
+      return;
+    }
 
-  if (!property) {
+    setStatus('loading');
+    try {
+      const nextProperty = await getPropertyById(id, language);
+      setProperty(nextProperty);
+      setStatus(nextProperty ? 'ready' : 'not-found');
+    } catch (error) {
+      console.error('[property-detail] Failed to load property', error);
+      setProperty(null);
+      setStatus('error');
+    }
+  }, [id, language]);
+
+  useEffect(() => {
+    if (!isLanguageReady) return;
+
+    let active = true;
+    const load = async () => {
+      if (!id) {
+        if (active) {
+          setProperty(null);
+          setStatus('not-found');
+        }
+        return;
+      }
+
+      setStatus('loading');
+      try {
+        const nextProperty = await getPropertyById(id, language);
+        if (!active) return;
+        setProperty(nextProperty);
+        setStatus(nextProperty ? 'ready' : 'not-found');
+      } catch (error) {
+        console.error('[property-detail] Failed to load property', error);
+        if (!active) return;
+        setProperty(null);
+        setStatus('error');
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, [id, isLanguageReady, language]);
+
+  if (!isLanguageReady || status === 'loading') {
+    return <DetailState icon="time" title={t('loading')} loading />;
+  }
+
+  if (status === 'error') {
+    return <DetailState icon="error" title={t('networkError')} actionTitle={t('tryAgain')} onAction={loadProperty} />;
+  }
+
+  if (status === 'not-found' || !property) {
     return (
-      <View style={styles.container}>
-        <PropertyNotFound />
-      </View>
+      <DetailState
+        icon="warning"
+        title={t('propertyNotFound')}
+        actionTitle={t('back')}
+        onAction={() => router.replace('/(main)/explore')}
+      />
     );
   }
 
-  const partner = getPartnerById(property.partnerId);
-
-  // Real share sheet, with a graceful message if the OS declines it
   const handleShare = async () => {
     try {
       await Share.share({
-        title: t(property.titleKey),
-        message: `${t(property.titleKey)} — ${AppConfig.links.website}`,
+        title: property.title,
+        message: `${property.title} — ${AppConfig.links.website}`,
       });
     } catch {
       Alert.alert(t('share'), t('demoActionBody'));
@@ -93,29 +121,11 @@ export default function PropertyDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* The gallery is dark, so the status bar is always light here */}
       <StatusBar barStyle="light-content" />
-
-      {/* Controls stay below the Dynamic Island and never cover the badge. */}
-      <Animated.View
-        entering={FadeIn.delay(150)}
-        style={[styles.topControls, { top: insets.top + 10 }]}
-      >
-        <IconButton
-          icon="back"
-          onPress={() => router.back()}
-          accessibilityLabel={t('back')}
-          variant="glass"
-          size={44}
-        />
+      <Animated.View entering={FadeIn.delay(150)} style={[styles.topControls, { top: insets.top + 10 }]}>
+        <IconButton icon="back" onPress={() => router.back()} accessibilityLabel={t('back')} variant="glass" size={44} />
         <View style={styles.topActions}>
-          <IconButton
-            icon="share"
-            onPress={handleShare}
-            accessibilityLabel={t('share')}
-            variant="glass"
-            size={44}
-          />
+          <IconButton icon="share" onPress={handleShare} accessibilityLabel={t('share')} variant="glass" size={44} />
           <FavoriteButton propertyId={property.id} variant="glass" size={44} />
         </View>
       </Animated.View>
@@ -125,44 +135,57 @@ export default function PropertyDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ImageGallery images={property.images} verified={property.verified} />
-
         <Animated.View entering={FadeInDown.delay(80)}>
-          <PropertyHeader property={property} />
+          <RemotePropertyHeader property={property} />
         </Animated.View>
-
-        <KeyFigures property={property} />
-
-        <InvestmentScoreCard
-          score={property.investmentScore}
-          analysis={property.aiAnalysis}
-        />
-
-        <DescriptionSection descriptionKey={property.descriptionKey} />
-
-        <WhyInvestSection type={property.type} />
-
-        <FeaturesSection features={property.features} />
-
-        {property.hasVideo && <VideoSection property={property} />}
-
-        <LocationSection property={property} />
-
-        {partner && <PartnerSection partner={partner} />}
-
-        <SimilarSection properties={similar} />
-
+        <RemoteKeyFigures property={property} />
+        <RemoteInvestmentMetrics property={property} />
+        <RemoteDescriptionSection description={property.description} />
+        <RemoteHighlightsSection highlights={property.highlights} />
+        <RemoteFeaturesSection property={property} />
+        <RemoteVideoSection property={property} />
+        <RemoteLocationSection property={property} />
+        <RemotePartnerSection property={property} />
       </ScrollView>
 
-      <BottomCTA partner={partner} propertyTitle={t(property.titleKey)} />
+      <BottomCTA
+        propertyId={property.id}
+        propertyReferenceCode={property.referenceCode}
+        preferredLanguage={language}
+      />
+    </View>
+  );
+}
+
+function DetailState({
+  icon,
+  title,
+  loading = false,
+  actionTitle,
+  onAction,
+}: {
+  icon: 'time' | 'error' | 'warning';
+  title: string;
+  loading?: boolean;
+  actionTitle?: string;
+  onAction?: () => void;
+}) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.stateContainer}>
+      {loading ? <ActivityIndicator color={colors.accent} size="large" /> : <AppIcon name={icon} size="xl" color={colors.textMuted} />}
+      <Text style={styles.stateText}>{title}</Text>
+      {actionTitle && onAction && (
+        <Button title={actionTitle} onPress={onAction} variant="secondary" size="md" fullWidth={false} />
+      )}
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  container: {
-    flex: 1,
-    backgroundColor: t.colors.background,
-  },
+  container: { flex: 1, backgroundColor: t.colors.background },
   topControls: {
     position: 'absolute',
     left: t.spacing.screenHorizontal,
@@ -172,11 +195,15 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'space-between',
     zIndex: 20,
   },
-  topActions: {
-    flexDirection: 'row',
-    gap: t.spacing.sm,
+  topActions: { flexDirection: 'row', gap: t.spacing.sm },
+  content: { paddingBottom: 170 },
+  stateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing.md,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    backgroundColor: t.colors.background,
   },
-  content: {
-    paddingBottom: 170,
-  },
+  stateText: { ...t.typography.body, color: t.colors.textSecondary, textAlign: 'center' },
 }));

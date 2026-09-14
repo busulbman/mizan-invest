@@ -9,6 +9,17 @@
 export { BottomCTA } from './BottomCTA';
 export { ImageGallery } from './ImageGallery';
 export {
+  RemoteDescriptionSection,
+  RemoteFeaturesSection,
+  RemoteHighlightsSection,
+  RemoteInvestmentMetrics,
+  RemoteKeyFigures,
+  RemoteLocationSection,
+  RemotePartnerSection,
+  RemotePropertyHeader,
+  RemoteVideoSection,
+} from './RemotePropertySections';
+export {
   DescriptionSection,
   FeaturesSection,
   InvestmentScoreCard,
