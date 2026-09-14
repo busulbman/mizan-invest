@@ -1,230 +1,197 @@
 /**
  * ============================================
- * PARTNER DASHBOARD PLACEHOLDER
+ * PARTNER DASHBOARD
  * ============================================
  *
- * Placeholder screen for partner dashboard.
- * Shows demo stats and navigation.
+ * The partner-side landing screen: verification marker, portfolio stats
+ * and the entry point for publishing a listing.
  *
- * Route: /(partner)/dashboard
+ * DEMO SCOPE — the figures are illustrative and "Add listing" confirms
+ * with an explanatory alert rather than opening an editor. Listing
+ * management and analytics belong to a later phase.
  *
- * TODO: Replace the demo stats with real partner analytics
- * TODO: Build full partner dashboard
- * TODO: Add listing management
- * TODO: Add analytics
+ * Total portfolio value is rendered through the shared currency
+ * formatter, so switching to TRY or RUB updates this screen too.
+ *
+ * TODO: Real partner analytics, listing management, lead inbox
  */
 
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Alert, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
+import { Badge, Button } from '@/components/ui';
+import { TranslationKey } from '@/constants/translations';
+import { useCurrency } from '@/context/CurrencyContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
+
+/** Illustrative portfolio value in USD, converted at render time */
+const PORTFOLIO_VALUE_USD = 2_400_000;
 
 export default function PartnerDashboardScreen() {
+  const styles = useStyles();
+  const { gradients } = useTheme();
   const { t } = useLanguage();
+  const { price } = useCurrency();
   const insets = useSafeAreaInsets();
+
+  const stats: { labelKey: TranslationKey; value: string; gold?: boolean }[] = [
+    { labelKey: 'activeListings', value: '24' },
+    { labelKey: 'totalViews', value: '1.2K' },
+    { labelKey: 'inquiries', value: '89' },
+    { labelKey: 'totalValue', value: price(PORTFOLIO_VALUE_USD), gold: true },
+  ];
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={theme.gradients.partnerGradient}
-        locations={[0, 0.4, 1]}
-        style={styles.gradient}
-      >
-        <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32 }]}>
-          <Animated.View entering={FadeIn.delay(200)} style={styles.header}>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedIcon}>✓</Text>
-              <Text style={styles.verifiedText}>{t('verifiedPartnerDemo')}</Text>
-            </View>
+      <LinearGradient colors={gradients.partnerGradient} locations={[0, 0.45, 1]} style={styles.fill}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 28 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View entering={FadeIn.delay(120)} style={styles.badgeRow}>
+            <Badge label={t('verifiedPartnerDemo')} tone="success" icon="verified" />
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.heroSection}>
-            <View style={styles.avatarContainer}>
-              <LinearGradient
-                colors={theme.gradients.gold}
-                style={styles.avatarGradient}
-              >
-                <Text style={styles.avatarText}>P</Text>
-              </LinearGradient>
-            </View>
-            <Text style={styles.title}>{t('partnerDashboard')}</Text>
-            <Text style={styles.subtitle}>{t('partnerDashboardSubtitle')}</Text>
+          <Animated.View entering={FadeInDown.delay(240).duration(600)} style={styles.hero}>
+            <LinearGradient colors={gradients.gold} style={styles.avatar}>
+              <Text style={styles.avatarText}>P</Text>
+            </LinearGradient>
+            <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+              {t('partnerDashboard')}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
+              {t('partnerDashboardSubtitle')}
+            </Text>
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.statsSection}>
-            <View style={styles.statsRow}>
-              <BlurView intensity={20} tint="dark" style={styles.statCard}>
-                <Text style={styles.statValue}>24</Text>
-                <Text style={styles.statLabel}>{t('activeListings')}</Text>
+          <Animated.View entering={FadeInUp.delay(380).duration(600)} style={styles.grid}>
+            {stats.map((stat) => (
+              <BlurView key={stat.labelKey} intensity={22} tint="dark" style={styles.statCard}>
+                <Text
+                  style={[styles.statValue, stat.gold && styles.statValueGold]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                >
+                  {stat.value}
+                </Text>
+                <Text style={styles.statLabel} numberOfLines={2} ellipsizeMode="tail">
+                  {t(stat.labelKey)}
+                </Text>
               </BlurView>
-              <BlurView intensity={20} tint="dark" style={styles.statCard}>
-                <Text style={styles.statValue}>1.2K</Text>
-                <Text style={styles.statLabel}>{t('totalViews')}</Text>
-              </BlurView>
-            </View>
-            <View style={styles.statsRow}>
-              <BlurView intensity={20} tint="dark" style={styles.statCard}>
-                <Text style={styles.statValue}>89</Text>
-                <Text style={styles.statLabel}>{t('inquiries')}</Text>
-              </BlurView>
-              <BlurView intensity={20} tint="dark" style={styles.statCard}>
-                <Text style={[styles.statValue, styles.goldText]}>$2.4M</Text>
-                <Text style={styles.statLabel}>{t('totalValue')}</Text>
-              </BlurView>
-            </View>
+            ))}
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.delay(800).duration(800)} style={styles.footer}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => {}}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={theme.gradients.gold}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.primaryButtonGradient}
-              >
-                <Text style={styles.primaryButtonText}>{t('addNewListing')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.backButton}
+          <Animated.View entering={FadeInUp.delay(520).duration(600)} style={styles.footer}>
+            <Button
+              title={t('addNewListing')}
+              onPress={() => Alert.alert(t('addNewListing'), t('featureComingSoon'))}
+              variant="gold"
+              size="lg"
+              icon="listings"
+            />
+            <Button
+              title={t('backToWelcome')}
               onPress={() => router.replace('/(auth)/welcome')}
-            >
-              <Text style={styles.backButtonText}>{t('backToWelcome')}</Text>
-            </TouchableOpacity>
+              variant="glass"
+              size="lg"
+            />
           </Animated.View>
-        </View>
+        </ScrollView>
       </LinearGradient>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.backgroundDark,
   },
-  gradient: {
+  fill: {
     flex: 1,
   },
   content: {
-    flex: 1,
-    paddingHorizontal: theme.spacing.screenHorizontal,
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: t.spacing.screenHorizontal,
   },
-  header: {
+  badgeRow: {
     alignItems: 'center',
   },
-  verifiedBadge: {
-    flexDirection: 'row',
+  hero: {
     alignItems: 'center',
-    backgroundColor: theme.colors.successOverlay.light,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.successOverlay.medium,
+    paddingVertical: t.spacing.section,
   },
-  verifiedIcon: {
-    fontSize: 14,
-    color: theme.colors.success,
-    marginRight: 8,
-    fontWeight: '700',
-  },
-  verifiedText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.success,
-  },
-  heroSection: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  avatarContainer: {
-    marginBottom: theme.spacing.xl,
-    ...theme.shadows.gold,
-  },
-  avatarGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.borderRadius.hero,
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: t.borderRadius.hero,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: t.spacing.lg,
+    ...t.shadows.gold,
   },
   avatarText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: theme.colors.primary,
+    ...t.typography.hero,
+    fontSize: 32,
+    lineHeight: 40,
+    color: t.colors.onAccent,
   },
   title: {
-    ...theme.typography.h1,
-    color: theme.colors.white,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.h1,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.small,
+    color: 'rgba(255, 255, 255, 0.72)',
+    textAlign: 'center',
+    marginTop: t.spacing.xs,
   },
-  statsSection: {
-    flex: 1,
-    gap: theme.spacing.smd,
-  },
-  statsRow: {
+
+  grid: {
     flexDirection: 'row',
-    gap: theme.spacing.smd,
+    flexWrap: 'wrap',
+    gap: t.spacing.smd,
   },
   statCard: {
-    flex: 1,
-    padding: theme.spacing.lg,
-    borderRadius: theme.borderRadius.xxl,
+    // Two per row on every width, with the gutter accounted for
+    width: (t.metrics.screenWidth - t.spacing.screenHorizontal * 2 - t.spacing.smd) / 2,
+    minHeight: 104,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.xxl,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   statValue: {
-    ...theme.typography.h1,
-    color: theme.colors.white,
-    marginBottom: 4,
+    ...t.typography.h1,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
-  goldText: {
-    color: theme.colors.accent,
+  statValueGold: {
+    color: t.colors.accent,
   },
   statLabel: {
-    ...theme.typography.caption,
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.caption,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    marginTop: 4,
   },
+
   footer: {
-    gap: theme.spacing.smd,
+    gap: t.spacing.smd,
+    marginTop: t.spacing.section,
   },
-  primaryButton: {
-    borderRadius: theme.borderRadius.xl,
-    overflow: 'hidden',
-    ...theme.shadows.gold,
-  },
-  primaryButtonGradient: {
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.primary,
-  },
-  backButton: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    ...theme.typography.body,
-    fontWeight: '500',
-    color: theme.colors.textOnDarkMuted,
-  },
-});
+}));

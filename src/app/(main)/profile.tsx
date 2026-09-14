@@ -1,30 +1,32 @@
 /**
  * ============================================
- * PROFILE SCREEN
+ * PROFILE
  * ============================================
  *
- * Sections: guest user card, preferences (language), partner portal
- * entry, about / legal links, app version.
+ * Guest card, quick stats, entry points to Settings and the partner
+ * portal, and the legal / support links.
  *
- * There is no authentication yet, so the user card renders the guest
- * state and offers the sign-in route.
+ * There is no authentication in the demo, so the card renders the guest
+ * state and offers the sign-in route. Preferences themselves live on the
+ * Settings screen — this screen links to it rather than duplicating the
+ * controls.
  *
- * TODO: Show the real user once authentication exists
- * TODO: Add notification preferences
+ * TODO: Show the signed-in investor once authentication exists
  */
 
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
 import { AppConfig } from '@/constants/config';
-import { AppIcon } from '@/components/ui/AppIcon';
 import { IconName } from '@/constants/icons';
-import { LanguageButton } from '@/components/ui/LanguageButton';
-import { useLanguage } from '@/context/LanguageContext';
 import { TranslationKey } from '@/constants/translations';
+import { AppIcon, Button, IconButton } from '@/components/ui';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { useNotifications } from '@/context/NotificationsContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 interface LinkRow {
   icon: IconName;
@@ -40,103 +42,207 @@ const ABOUT_ROWS: LinkRow[] = [
 ];
 
 export default function ProfileScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { count: favoriteCount } = useFavorites();
+  const { unreadCount } = useNotifications();
+
+  const goBack = () => {
+    router.replace('/(main)/home');
+  };
+
+  // Legal and support pages are outside the demo's scope; say so
+  // explicitly rather than leaving a row that does nothing.
+  const openInfoRow = (labelKey: TranslationKey) => {
+    Alert.alert(t(labelKey), t('featureComingSoon'));
+  };
 
   return (
     <View style={styles.container}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 32 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Mobile header */}
         <Animated.View entering={FadeIn} style={styles.header}>
-          <Text style={styles.title}>{t('profileTitle')}</Text>
+          <IconButton icon="back" onPress={goBack} accessibilityLabel={t('back')} variant="surface" size={44} />
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+            {t('profileTitle')}
+          </Text>
+          <Pressable
+            onPress={() => router.push('/(main)/settings')}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings')}
+            style={({ pressed }) => [styles.gearButton, pressed && styles.pressed]}
+          >
+            <AppIcon name="settings" size="md" color={colors.text} />
+          </Pressable>
         </Animated.View>
 
-        {/* ============================================ */}
-        {/* USER CARD */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(100)} style={styles.card}>
+        {/* ---------------------------------------- */}
+        {/* GUEST CARD */}
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeInDown.delay(60)} style={styles.card}>
           <View style={styles.userRow}>
             <View style={styles.avatar}>
-              <AppIcon name="profile" size="lg" color={theme.colors.primary} />
+              <AppIcon name="profile" size="lg" color={colors.accent} />
             </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{t('guestUser')}</Text>
-              <Text style={styles.userSubtitle}>{t('guestUserSubtitle')}</Text>
+            <View style={styles.userText}>
+              <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+                {t('guestUser')}
+              </Text>
+              <Text style={styles.userSub} numberOfLines={2} ellipsizeMode="tail">
+                {t('guestUserSubtitle')}
+              </Text>
             </View>
           </View>
 
-          <Text style={styles.signInPrompt}>{t('signInPrompt')}</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {favoriteCount}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={2} ellipsizeMode="tail">
+                {t('savedProperties')}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {unreadCount}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={2} ellipsizeMode="tail">
+                {t('notifications')}
+              </Text>
+            </View>
+          </View>
 
-          <TouchableOpacity
-            style={styles.signInButton}
+          <Text style={styles.prompt} numberOfLines={3}>
+            {t('signInPrompt')}
+          </Text>
+
+          <Button
+            title={t('login')}
             onPress={() => router.push('/(auth)/investor-login')}
-            activeOpacity={0.9}
+            variant="primary"
+            size="md"
+            iconRight="arrowForward"
+            style={styles.signInButton}
+          />
+        </Animated.View>
+
+        {/* ---------------------------------------- */}
+        {/* FAVORITES & SETTINGS */}
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeInDown.delay(120)} style={styles.section}>
+          <Text style={styles.sectionLabel} numberOfLines={1}>
+            {t('preferences')}
+          </Text>
+          <Pressable
+            onPress={() => router.push('/(main)/favorites')}
+            accessibilityRole="button"
+            accessibilityLabel={t('favorites')}
+            style={({ pressed }) => [styles.linkCard, styles.favoritesCard, pressed && styles.pressed]}
           >
-            <Text style={styles.signInButtonText}>{t('login')}</Text>
-            <AppIcon name="arrowForward" size="sm" color={theme.colors.white} />
-          </TouchableOpacity>
+            <View style={styles.linkIcon}>
+              <AppIcon name="favorite" size="md" color={colors.accent} />
+            </View>
+            <View style={styles.linkText}>
+              <Text style={styles.linkTitle} numberOfLines={1} ellipsizeMode="tail">
+                {t('favorites')}
+              </Text>
+              <Text style={styles.linkSub} numberOfLines={1} ellipsizeMode="tail">
+                {t('savedProperties')}
+              </Text>
+            </View>
+            <Text style={styles.favoriteCount} numberOfLines={1}>
+              {favoriteCount}
+            </Text>
+            <AppIcon name="arrowForward" size="sm" color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(main)/settings')}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.linkCard, pressed && styles.pressed]}
+          >
+            <View style={styles.linkIcon}>
+              <AppIcon name="settings" size="md" color={colors.accent} />
+            </View>
+            <View style={styles.linkText}>
+              <Text style={styles.linkTitle} numberOfLines={1} ellipsizeMode="tail">
+                {t('settings')}
+              </Text>
+              <Text style={styles.linkSub} numberOfLines={2} ellipsizeMode="tail">
+                {t('language')} · {t('currency')} · {t('appearance')}
+              </Text>
+            </View>
+            <AppIcon name="arrowForward" size="sm" color={colors.textMuted} />
+          </Pressable>
         </Animated.View>
 
-        {/* ============================================ */}
-        {/* PREFERENCES */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(200)} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('preferences')}</Text>
-          <View style={styles.groupCard}>
-            <LanguageButton variant="row" />
-          </View>
-        </Animated.View>
-
-        {/* ============================================ */}
+        {/* ---------------------------------------- */}
         {/* PARTNER PORTAL */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(300)} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('forPartners')}</Text>
-          <TouchableOpacity
-            style={styles.partnerCard}
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeInDown.delay(180)} style={styles.section}>
+          <Text style={styles.sectionLabel} numberOfLines={1}>
+            {t('forPartners')}
+          </Text>
+          <Pressable
             onPress={() => router.push('/(auth)/partner-login')}
-            activeOpacity={0.85}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.partnerCard, pressed && styles.pressed]}
           >
             <View style={styles.partnerIcon}>
-              <AppIcon name="building" size="md" color={theme.colors.accent} />
+              <AppIcon name="building" size="md" color={colors.accent} />
             </View>
-            <View style={styles.partnerText}>
-              <Text style={styles.partnerTitle}>{t('partnerPortalAccess')}</Text>
-              <Text style={styles.partnerSubtitle}>{t('partnerPortalDescription')}</Text>
+            <View style={styles.linkText}>
+              <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">
+                {t('partnerPortalAccess')}
+              </Text>
+              <Text style={styles.partnerSub} numberOfLines={2} ellipsizeMode="tail">
+                {t('partnerPortalDescription')}
+              </Text>
             </View>
-            <AppIcon name="arrowForward" size="sm" color={theme.colors.textMuted} />
-          </TouchableOpacity>
+            <AppIcon name="arrowForward" size="sm" color={colors.onDarkMuted} />
+          </Pressable>
         </Animated.View>
 
-        {/* ============================================ */}
+        {/* ---------------------------------------- */}
         {/* ABOUT */}
-        {/* TODO: Open the real URLs from AppConfig.links */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('aboutSection')}</Text>
-          <View style={styles.groupCard}>
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeInDown.delay(240)} style={styles.section}>
+          <Text style={styles.sectionLabel} numberOfLines={1}>
+            {t('aboutSection')}
+          </Text>
+          <View style={styles.group}>
             {ABOUT_ROWS.map((row, index) => (
-              <TouchableOpacity
+              <Pressable
                 key={row.labelKey}
-                style={[styles.linkRow, index > 0 && styles.linkRowDivider]}
-                activeOpacity={0.7}
+                onPress={() => openInfoRow(row.labelKey)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.row,
+                  index > 0 && styles.rowDivider,
+                  pressed && styles.pressed,
+                ]}
               >
-                <View style={styles.linkIcon}>
-                  <AppIcon name={row.icon} size="md" color={theme.colors.primary} />
+                <View style={styles.rowIcon}>
+                  <AppIcon name={row.icon} size="md" color={colors.textSecondary} />
                 </View>
-                <Text style={styles.linkLabel}>{t(row.labelKey)}</Text>
-                <AppIcon name="arrowForward" size="sm" color={theme.colors.textMuted} />
-              </TouchableOpacity>
+                <Text style={styles.rowLabel} numberOfLines={1} ellipsizeMode="tail">
+                  {t(row.labelKey)}
+                </Text>
+                <AppIcon name="arrowForward" size="sm" color={colors.textMuted} />
+              </Pressable>
             ))}
           </View>
         </Animated.View>
 
-        {/* App version */}
-        <Text style={styles.version}>
+        <Text style={styles.version} numberOfLines={1}>
           {t('appVersion')} {AppConfig.version}
         </Text>
       </ScrollView>
@@ -144,162 +250,240 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
+    backgroundColor: t.colors.background,
   },
   content: {
-    paddingBottom: theme.spacing.section,
+    paddingBottom: t.spacing.section,
   },
-  header: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    paddingBottom: theme.spacing.md,
-  },
-  title: {
-    ...theme.typography.h2,
-    color: theme.colors.textDark,
+  pressed: {
+    opacity: 0.75,
   },
 
-  // User card
-  card: {
-    marginHorizontal: theme.spacing.screenHorizontal,
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.xxl,
-    padding: theme.spacing.lg,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: t.spacing.smd,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingBottom: t.spacing.md,
+  },
+  title: {
+    flexShrink: 1,
+    minWidth: 0,
+    ...t.typography.h2,
+    color: t.colors.text,
+  },
+  gearButton: {
+    width: t.metrics.minTouch,
+    height: t.metrics.minTouch,
+    borderRadius: t.borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.shadows.card,
+    borderColor: t.colors.border,
+    flexShrink: 0,
+  },
+
+  // ---- Guest card ----
+  card: {
+    marginHorizontal: t.spacing.screenHorizontal,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.xxl,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    ...t.shadows.card,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.smd,
+    gap: t.spacing.smd,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.background,
+    width: 52,
+    height: 52,
+    borderRadius: t.borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: t.colors.accentOverlay.light,
+    flexShrink: 0,
   },
-  userInfo: {
+  userText: {
     flex: 1,
+    minWidth: 0,
   },
   userName: {
-    ...theme.typography.h4,
-    color: theme.colors.textDark,
+    ...t.typography.h4,
+    color: t.colors.text,
   },
-  userSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textLight,
-    marginTop: 2,
-  },
-  signInPrompt: {
-    ...theme.typography.small,
-    color: theme.colors.textLight,
-    marginTop: theme.spacing.md,
-  },
-  signInButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.lg,
-    marginTop: theme.spacing.md,
-  },
-  signInButtonText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.white,
+  userSub: {
+    ...t.typography.caption,
+    color: t.colors.textSecondary,
+    marginTop: 1,
   },
 
-  // Sections
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginTop: t.spacing.md,
+    paddingVertical: t.spacing.smd,
+    borderRadius: t.borderRadius.lg,
+    backgroundColor: t.colors.surfaceAlt,
+  },
+  stat: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    paddingHorizontal: t.spacing.sm,
+  },
+  statValue: {
+    ...t.typography.h3,
+    color: t.colors.text,
+  },
+  statLabel: {
+    ...t.typography.tiny,
+    color: t.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: t.colors.border,
+  },
+
+  prompt: {
+    ...t.typography.caption,
+    color: t.colors.textSecondary,
+    marginTop: t.spacing.smd,
+  },
+  signInButton: {
+    marginTop: t.spacing.smd,
+  },
+
+  // ---- Sections ----
   section: {
-    marginTop: theme.spacing.xl,
+    marginTop: t.spacing.xl,
   },
   sectionLabel: {
-    ...theme.typography.label,
-    color: theme.colors.textLight,
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.label,
+    color: t.colors.textSecondary,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    marginBottom: t.spacing.sm,
   },
-  groupCard: {
-    marginHorizontal: theme.spacing.screenHorizontal,
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.xl,
+  group: {
+    marginHorizontal: t.spacing.screenHorizontal,
+    borderRadius: t.borderRadius.xl,
+    backgroundColor: t.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: t.colors.border,
     overflow: 'hidden',
   },
 
-  // Partner portal
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.smd,
+    marginHorizontal: t.spacing.screenHorizontal,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.xl,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
+  favoritesCard: {
+    marginBottom: t.spacing.sm,
+  },
+  linkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: t.borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.colors.surfaceAlt,
+    flexShrink: 0,
+  },
+  linkText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  linkTitle: {
+    ...t.typography.bodyBold,
+    color: t.colors.text,
+  },
+  linkSub: {
+    ...t.typography.caption,
+    color: t.colors.textSecondary,
+    marginTop: 1,
+  },
+  favoriteCount: {
+    flexShrink: 0,
+    ...t.typography.bodyBold,
+    color: t.colors.accent,
+  },
+
   partnerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.smd,
-    marginHorizontal: theme.spacing.screenHorizontal,
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.md,
+    gap: t.spacing.smd,
+    marginHorizontal: t.spacing.screenHorizontal,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.xl,
+    backgroundColor: t.colors.primary,
   },
   partnerIcon: {
     width: 40,
     height: 40,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.accentOverlay.light,
+    borderRadius: t.borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  partnerText: {
-    flex: 1,
+    backgroundColor: t.colors.accentOverlay.medium,
+    flexShrink: 0,
   },
   partnerTitle: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.white,
+    ...t.typography.bodyBold,
+    color: t.colors.onPrimary,
   },
-  partnerSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textOnDarkMuted,
-    marginTop: 2,
+  partnerSub: {
+    ...t.typography.caption,
+    color: t.colors.onDarkMuted,
+    marginTop: 1,
   },
 
-  // Link rows
-  linkRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.smd,
-    paddingVertical: 14,
-    paddingHorizontal: theme.spacing.cardPadding,
+    gap: t.spacing.smd,
+    minHeight: 56,
+    paddingHorizontal: t.spacing.cardPadding,
   },
-  linkRowDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
+  rowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: t.colors.border,
   },
-  linkIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background,
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: t.borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: t.colors.surfaceAlt,
+    flexShrink: 0,
   },
-  linkLabel: {
+  rowLabel: {
     flex: 1,
-    ...theme.typography.body,
-    color: theme.colors.textDark,
+    minWidth: 0,
+    ...t.typography.body,
+    color: t.colors.text,
   },
 
   version: {
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
+    ...t.typography.caption,
+    color: t.colors.textMuted,
     textAlign: 'center',
-    marginTop: theme.spacing.xl,
+    marginTop: t.spacing.xl,
   },
-});
+}));

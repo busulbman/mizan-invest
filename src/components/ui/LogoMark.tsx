@@ -18,8 +18,8 @@
  */
 
 import React from 'react';
-import { View, Image, StyleSheet, ViewStyle } from 'react-native';
-import { theme } from '@/theme';
+import { ImageStyle, StyleProp, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { LocalImages } from '@/constants/images';
 
 // ============================================
@@ -34,7 +34,7 @@ export interface LogoMarkProps {
   showShadow?: boolean;
 
   /** Custom container style */
-  style?: ViewStyle;
+  style?: StyleProp<ImageStyle>;
 }
 
 // ============================================
@@ -43,19 +43,16 @@ export interface LogoMarkProps {
 
 const SIZES = {
   small: {
-    container: 44,
-    image: 32,
-    borderRadius: 12,
+    image: 36,
+    borderRadius: 10,
   },
   medium: {
-    container: 64,
-    image: 48,
-    borderRadius: 18,
+    image: 56,
+    borderRadius: 16,
   },
   large: {
-    container: 100,
-    image: 72,
-    borderRadius: 28,
+    image: 92,
+    borderRadius: 24,
   },
 } as const;
 
@@ -71,34 +68,21 @@ export function LogoMark({
   const dimensions = SIZES[size];
 
   return (
-    <View
+    <Image
+      source={LocalImages.logo}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      accessibilityLabel="Mizan Invest"
       style={[
-        styles.container,
         showShadow && styles.shadow,
         {
-          width: dimensions.container,
-          height: dimensions.container,
+          width: dimensions.image,
+          height: dimensions.image,
           borderRadius: dimensions.borderRadius,
         },
         style,
       ]}
-    >
-      {/*
-        MAIN APP LOGO
-        Replace assets/images/icon.png to update branding everywhere
-      */}
-      <Image
-        source={LocalImages.logo}
-        style={[
-          styles.image,
-          {
-            width: dimensions.image,
-            height: dimensions.image,
-          },
-        ]}
-        resizeMode="contain"
-      />
-    </View>
+    />
   );
 }
 
@@ -107,21 +91,12 @@ export function LogoMark({
 // ============================================
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: theme.colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
   shadow: {
-    shadowColor: theme.colors.accent,
+    shadowColor: '#D4B483',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 16,
-    elevation: 8,
-  },
-  image: {
-    // Image will be sized by the dimensions prop
+    elevation: 4,
   },
 });
 

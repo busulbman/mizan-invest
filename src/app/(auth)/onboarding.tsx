@@ -1,89 +1,93 @@
 /**
  * ============================================
- * ONBOARDING SCREEN
+ * ONBOARDING
  * ============================================
  *
- * 3-slide introduction to Mizan Invest.
- * Shows key features and value propositions.
+ * Three full-bleed slides introducing the product, with Skip pinned top
+ * right and pagination + Next pinned to the bottom safe area.
  *
- * TODO: Track onboarding completion in AsyncStorage
- * TODO: Add skip confirmation for first-time users
+ * The slide content reserves the footer height, so the longest Russian
+ * headline still clears the dots and the button instead of sliding under
+ * them on a small screen.
+ *
+ * TODO: Record completion in AsyncStorage so returning users skip this
  */
 
-import { useState, useRef } from 'react';
-import { View, StyleSheet, FlatList, Dimensions, TouchableOpacity, Text } from 'react-native';
+import { useRef, useState } from 'react';
+import { Dimensions, FlatList, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
 import { Images } from '@/constants/images';
-import { OnboardingSlide } from '@/components/ui/OnboardingSlide';
+import { TranslationKey } from '@/constants/translations';
+import { Button, OnboardingSlide } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { makeStyles } from '@/context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
-// Onboarding slide configuration
-const SLIDES_CONFIG = [
+interface SlideConfig {
+  badgeKey: TranslationKey;
+  titleKey: TranslationKey;
+  subtitleKey: TranslationKey;
+  image: string;
+}
+
+const SLIDES: SlideConfig[] = [
   {
-    badgeKey: 'onboarding1Badge' as const,
-    titleKey: 'onboarding1Title' as const,
-    subtitleKey: 'onboarding1Subtitle' as const,
+    badgeKey: 'onboarding1Badge',
+    titleKey: 'onboarding1Title',
+    subtitleKey: 'onboarding1Subtitle',
     image: Images.onboarding.slide1,
   },
   {
-    badgeKey: 'onboarding2Badge' as const,
-    titleKey: 'onboarding2Title' as const,
-    subtitleKey: 'onboarding2Subtitle' as const,
+    badgeKey: 'onboarding2Badge',
+    titleKey: 'onboarding2Title',
+    subtitleKey: 'onboarding2Subtitle',
     image: Images.onboarding.slide2,
   },
   {
-    badgeKey: 'onboarding3Badge' as const,
-    titleKey: 'onboarding3Title' as const,
-    subtitleKey: 'onboarding3Subtitle' as const,
+    badgeKey: 'onboarding3Badge',
+    titleKey: 'onboarding3Title',
+    subtitleKey: 'onboarding3Subtitle',
     image: Images.onboarding.slide3,
   },
 ];
 
 export default function OnboardingScreen() {
+  const styles = useStyles();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
 
-  const isLastSlide = currentIndex === SLIDES_CONFIG.length - 1;
+  const listRef = useRef<FlatList<SlideConfig>>(null);
+  const [index, setIndex] = useState(0);
 
-  const handleNext = () => {
-    if (isLastSlide) {
-      // TODO: Mark onboarding as completed
+  const isLast = index === SLIDES.length - 1;
+
+  const goNext = () => {
+    if (isLast) {
       router.replace('/(auth)/welcome');
     } else {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+      listRef.current?.scrollToIndex({ index: index + 1, animated: true });
     }
-  };
-
-  const handleSkip = () => {
-    // TODO: Mark onboarding as skipped
-    router.replace('/(auth)/welcome');
   };
 
   return (
     <View style={styles.container}>
-      {/* Slides */}
       <FlatList
-        ref={flatListRef}
-        data={SLIDES_CONFIG}
+        ref={listRef}
+        data={SLIDES}
         horizontal
         pagingEnabled
-        showsHorizontalScrollIndicator={false}
         bounces={false}
-        keyExtractor={(_, index) => index.toString()}
-        onMomentumScrollEnd={(e) => {
-          const index = Math.round(e.nativeEvent.contentOffset.x / width);
-          setCurrentIndex(index);
-        }}
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.titleKey}
+        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+        onMomentumScrollEnd={(event) =>
+          setIndex(Math.round(event.nativeEvent.contentOffset.x / width))
+        }
         renderItem={({ item }) => (
           <OnboardingSlide
             title={t(item.titleKey)}
@@ -94,125 +98,97 @@ export default function OnboardingScreen() {
         )}
       />
 
-      {/* Skip button */}
-      <Animated.View
-        entering={FadeIn.delay(800)}
-        style={[styles.header, { top: insets.top + 16 }]}
-      >
-        <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-          <BlurView intensity={30} tint="dark" style={styles.skipBlur}>
-            <Text style={styles.skipText}>{t('skip')}</Text>
+      {/* Skip */}
+      <Animated.View entering={FadeIn.delay(600)} style={[styles.skipWrap, { top: insets.top + 12 }]}>
+        <Pressable
+          onPress={() => router.replace('/(auth)/welcome')}
+          accessibilityRole="button"
+          accessibilityLabel={t('skip')}
+          style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
+        >
+          <BlurView intensity={28} tint="dark" style={styles.skipInner}>
+            <Text style={styles.skipText} numberOfLines={1}>
+              {t('skip')}
+            </Text>
           </BlurView>
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
 
-      {/* Footer with pagination and next button */}
+      {/* Footer */}
       <Animated.View
-        entering={FadeInUp.delay(1000).duration(600)}
-        style={[styles.footer, { paddingBottom: insets.bottom + 32 }]}
+        entering={FadeInUp.delay(700).duration(500)}
+        style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}
       >
-        {/* Pagination dots */}
-        <View style={styles.pagination}>
-          {SLIDES_CONFIG.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                currentIndex === index && styles.activeDot,
-              ]}
-            />
+        <View style={styles.dots}>
+          {SLIDES.map((slide, i) => (
+            <View key={slide.titleKey} style={[styles.dot, i === index && styles.dotActive]} />
           ))}
         </View>
 
-        {/* Next/Get Started button */}
-        <TouchableOpacity
-          style={styles.nextButton}
-          onPress={handleNext}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.nextButtonText}>
-            {isLastSlide ? t('getStarted') : t('next')}
-          </Text>
-          <View style={styles.nextButtonArrow}>
-            <AppIcon name="arrowForward" size="md" color={theme.colors.white} />
-          </View>
-        </TouchableOpacity>
+        <Button
+          title={isLast ? t('getStarted') : t('next')}
+          onPress={goNext}
+          variant="gold"
+          size="lg"
+          iconRight="arrowForward"
+        />
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.backgroundDark,
   },
-  header: {
+  pressed: {
+    opacity: 0.75,
+  },
+
+  skipWrap: {
     position: 'absolute',
-    right: theme.spacing.screenHorizontal,
+    right: t.spacing.screenHorizontal,
     zIndex: 10,
   },
-  skipButton: {
-    overflow: 'hidden',
-    borderRadius: theme.borderRadius.full,
-  },
-  skipBlur: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.full,
+  skip: {
+    height: t.metrics.minTouch,
+    borderRadius: t.borderRadius.full,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+    borderColor: t.colors.overlay.medium,
+  },
+  skipInner: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   skipText: {
-    ...theme.typography.small,
-    fontWeight: '500',
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.captionBold,
+    color: t.colors.onDark,
   },
+
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: theme.spacing.section,
+    paddingHorizontal: t.spacing.xl,
   },
-  pagination: {
+  dots: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: theme.spacing.section,
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.lg,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
   },
-  activeDot: {
-    width: 32,
-    backgroundColor: theme.colors.accent,
-  },
-  nextButton: {
-    backgroundColor: theme.colors.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: theme.borderRadius.xl,
-    ...theme.shadows.floating,
-  },
-  nextButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.primary,
-  },
-  nextButtonArrow: {
-    marginLeft: 12,
+  dotActive: {
     width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: t.colors.accent,
   },
-});
+}));

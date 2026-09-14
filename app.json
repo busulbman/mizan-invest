@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "mizan-invest",
+    "name": "Mizan İnvest",
     "slug": "mizan-invest",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mizaninvest",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.nurali.mizaninvest",
       "icon": "./assets/images/icon.png",
@@ -40,7 +40,9 @@
         }
       ],
       "expo-image",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

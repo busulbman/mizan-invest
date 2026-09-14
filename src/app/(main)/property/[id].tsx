@@ -1,302 +1,182 @@
 /**
  * ============================================
- * PROPERTY DETAIL SCREEN
+ * PROPERTY DETAIL
  * ============================================
  *
- * Premium property detail view.
- * Most important screen in Mizan Invest.
+ * The most important screen in the app. Section order is fixed and
+ * deliberate — it walks an investor from "what is it" to "can I trust
+ * it" to "how do I act":
  *
- * Sections:
- * 1. Image Gallery
- * 2. Property Info
- * 3. AI Investment Analysis
- * 4. Property Description
- * 5. Property Features
- * 6. Location Map
- * 7. Partner Information
- * 8. Video Tour
- * 9. Similar Properties
- * 10. Bottom CTA
+ *   1  photo gallery (tap → full-screen, zoomable)
+ *   2  title, location, price
+ *   3  key figures
+ *   4  investment score
+ *   5  description
+ *   6  why invest here
+ *   7  features
+ *   8  project video
+ *   9  location
+ *  10  verified partner
+ *  11  similar listings
+ *  12  sticky CTA (WhatsApp · call · interested)
  *
- * TODO: Connect to backend API
- * TODO: Implement favorites persistence
- * TODO: Add share functionality
- * TODO: Lead Generation System
- * TODO: CRM Tracking
- * TODO: Commission Tracking
+ * The floating back button sits below the safe-area inset so it clears
+ * the Dynamic Island, and the scroll content reserves room for the
+ * sticky bar so the last section is never hidden behind it.
+ *
+ * TODO: Connect to the listings API
+ * TODO: Lead generation + CRM tracking behind "I'm interested"
  */
 
-import { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Text,
-  StatusBar,
-  Alert,
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useMemo } from 'react';
+import { Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { IconButton } from '@/components/ui';
+import { FavoriteButton } from '@/components/cards/FavoriteButton';
 import {
-  getPropertyById,
-  getSimilarProperties,
-  Property,
-} from '@/constants/mockData';
-import {
-  ImageGallery,
-  PropertyInfo,
-  AIAnalysisSection,
-  PropertyFeatures,
-  PropertyDescription,
-  LocationSection,
-  PartnerInfo,
-  VideoSection,
-  SimilarProperties,
   BottomCTA,
+  DescriptionSection,
+  FeaturesSection,
+  ImageGallery,
+  InvestmentScoreCard,
+  KeyFigures,
+  LocationSection,
+  PartnerSection,
+  PropertyHeader,
+  PropertyNotFound,
+  SimilarSection,
+  VideoSection,
+  WhyInvestSection,
 } from '@/components/property';
+import { getPartnerById, getPropertyById, getSimilarProperties } from '@/constants/mockData';
+import { AppConfig } from '@/constants/config';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function PropertyDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const styles = useStyles();
+  const { isDark } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const [property, setProperty] = useState<Property | null>(null);
-  const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
-  const [isFavorite, setIsFavorite] = useState(false);
-
-  // Load property data
-  useEffect(() => {
-    // TODO: Replace with API call
-    const loadedProperty = getPropertyById(id || '1');
-    if (loadedProperty) {
-      setProperty(loadedProperty);
-      setIsFavorite(loadedProperty.favorite || false);
-      setSimilarProperties(getSimilarProperties(loadedProperty, 3));
-    }
-  }, [id]);
-
-  // Handle back navigation
-  const handleBack = () => {
-    router.back();
-  };
-
-  // Handle favorite toggle
-  const handleFavorite = () => {
-    // TODO: Connect to backend/storage
-    setIsFavorite(!isFavorite);
-  };
-
-  // Handle share
-  const handleShare = () => {
-    // TODO: Implement share functionality
-    Alert.alert(t('share'), t('featureComingSoon'));
-  };
-
-  // Handle contact partner
-  const handleContactPartner = () => {
-    // TODO: Lead Generation System
-    // TODO: CRM Tracking
-    Alert.alert(t('contactPartner'), t('contactPartnerMessage'));
-  };
-
-  // Handle save property
-  const handleSaveProperty = () => {
-    // TODO: Connect to user favorites
-    setIsFavorite(!isFavorite);
-  };
-
-  // Handle watch video
-  const handleWatchVideo = () => {
-    // TODO: Connect YouTube videos
-    Alert.alert(t('watchVideo'), t('featureComingSoon'));
-  };
-
-  // Handle view map
-  const handleViewMap = () => {
-    // TODO: Integrate Google Maps
-    Alert.alert(t('viewOnMap'), t('featureComingSoon'));
-  };
-
-  // Handle similar property press
-  const handleSimilarPropertyPress = (similarProperty: Property) => {
-    // TODO: Navigate to property detail
-    router.push(`/(main)/property/${similarProperty.id}`);
-  };
+  const property = useMemo(() => getPropertyById(id ?? ''), [id]);
+  const similar = useMemo(
+    () => (property ? getSimilarProperties(property, 6) : []),
+    [property]
+  );
 
   if (!property) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>{t('loading')}</Text>
+      <View style={styles.container}>
+        <PropertyNotFound />
       </View>
     );
   }
 
+  const partner = getPartnerById(property.partnerId);
+
+  // Real share sheet, with a graceful message if the OS declines it
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        title: t(property.titleKey),
+        message: `${t(property.titleKey)} — ${AppConfig.links.website}`,
+      });
+    } catch {
+      Alert.alert(t('share'), t('demoActionBody'));
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* The gallery is dark, so the status bar is always light here */}
       <StatusBar barStyle="light-content" />
 
-      {/* Back Button - Fixed */}
+      {/* Controls stay below the Dynamic Island and never cover the badge. */}
       <Animated.View
-        entering={FadeIn.delay(300)}
-        style={[styles.backButton, { top: insets.top + 10 }]}
+        entering={FadeIn.delay(150)}
+        style={[styles.topControls, { top: insets.top + 10 }]}
       >
-        <TouchableOpacity onPress={handleBack}>
-          <BlurView intensity={40} tint="dark" style={styles.backBlur}>
-            <AppIcon name="back" size="lg" color={theme.colors.white} />
-          </BlurView>
-        </TouchableOpacity>
+        <IconButton
+          icon="back"
+          onPress={() => router.back()}
+          accessibilityLabel={t('back')}
+          variant="glass"
+          size={44}
+        />
+        <View style={styles.topActions}>
+          <IconButton
+            icon="share"
+            onPress={handleShare}
+            accessibilityLabel={t('share')}
+            variant="glass"
+            size={44}
+          />
+          <FavoriteButton propertyId={property.id} variant="glass" size={44} />
+        </View>
       </Animated.View>
 
-      {/* Scrollable Content */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 160 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Image Gallery */}
-        <ImageGallery
-          images={property.images || [property.image]}
-          verified={property.verified}
+        <ImageGallery images={property.images} verified={property.verified} />
+
+        <Animated.View entering={FadeInDown.delay(80)}>
+          <PropertyHeader property={property} />
+        </Animated.View>
+
+        <KeyFigures property={property} />
+
+        <InvestmentScoreCard
+          score={property.investmentScore}
+          analysis={property.aiAnalysis}
         />
 
-        {/* 2. Property Info */}
-        <Animated.View entering={FadeInDown.delay(200)}>
-          <PropertyInfo
-            property={property}
-            onFavoritePress={handleFavorite}
-            onSharePress={handleShare}
-            isFavorite={isFavorite}
-          />
-        </Animated.View>
+        <DescriptionSection descriptionKey={property.descriptionKey} />
 
-        {/* 3. AI Investment Analysis */}
-        {property.aiAnalysis && (
-          <Animated.View entering={FadeInDown.delay(300)}>
-            <AIAnalysisSection analysis={property.aiAnalysis} />
-          </Animated.View>
-        )}
+        <WhyInvestSection type={property.type} />
 
-        {/* Divider */}
-        <View style={styles.divider} />
+        <FeaturesSection features={property.features} />
 
-        {/* 4. Property Description */}
-        {property.description && (
-          <Animated.View entering={FadeInDown.delay(400)}>
-            <PropertyDescription description={property.description} />
-          </Animated.View>
-        )}
+        {property.hasVideo && <VideoSection property={property} />}
 
-        {/* 5. Property Features */}
-        {property.features && (
-          <Animated.View entering={FadeInDown.delay(500)}>
-            <PropertyFeatures features={property.features} />
-          </Animated.View>
-        )}
+        <LocationSection property={property} />
 
-        {/* 6. Location Section */}
-        <Animated.View entering={FadeInDown.delay(600)}>
-          <LocationSection
-            city={property.city}
-            country={property.country}
-            onViewMap={handleViewMap}
-          />
-        </Animated.View>
+        {partner && <PartnerSection partner={partner} />}
 
-        {/* 7. Partner Information */}
-        {property.partner && (
-          <Animated.View entering={FadeInDown.delay(700)}>
-            <PartnerInfo
-              partner={property.partner}
-              onViewProfile={() => {}}
-            />
-          </Animated.View>
-        )}
+        <SimilarSection properties={similar} />
 
-        {/* 8. Video Section */}
-        {property.videoUrl && (
-          <Animated.View entering={FadeInDown.delay(800)}>
-            <VideoSection
-              videoUrl={property.videoUrl}
-              onWatchVideo={handleWatchVideo}
-            />
-          </Animated.View>
-        )}
-
-        {/* 9. Similar Properties */}
-        <Animated.View entering={FadeInDown.delay(900)}>
-          <SimilarProperties
-            properties={similarProperties}
-            onPropertyPress={handleSimilarPropertyPress}
-          />
-        </Animated.View>
-
-        {/* Bottom padding for CTA */}
-        <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* 10. Bottom CTA - Fixed */}
-      <BottomCTA
-        onContactPartner={handleContactPartner}
-        onSaveProperty={handleSaveProperty}
-        isSaved={isFavorite}
-      />
+      <BottomCTA partner={partner} propertyTitle={t(property.titleKey)} />
     </View>
   );
 }
 
-// ============================================
-// STYLES
-// ============================================
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: t.colors.background,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-  },
-  loadingText: {
-    ...theme.typography.body,
-    color: theme.colors.textLight,
-  },
-  backButton: {
+  topControls: {
     position: 'absolute',
-    left: theme.spacing.screenHorizontal,
-    zIndex: 100,
-  },
-  backBlur: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.borderRadius.md,
+    left: t.spacing.screenHorizontal,
+    right: t.spacing.screenHorizontal,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+    justifyContent: 'space-between',
+    zIndex: 20,
   },
-  scrollView: {
-    flex: 1,
+  topActions: {
+    flexDirection: 'row',
+    gap: t.spacing.sm,
   },
-  scrollContent: {
-    paddingBottom: 0,
+  content: {
+    paddingBottom: 170,
   },
-  divider: {
-    height: 8,
-    backgroundColor: theme.colors.background,
-    marginVertical: theme.spacing.sm,
-  },
-  bottomPadding: {
-    height: 160,
-  },
-});
+}));

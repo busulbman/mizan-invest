@@ -1,470 +1,610 @@
 /**
  * ============================================
- * HOME SCREEN
+ * HOME
  * ============================================
  *
- * Main investor home screen with property listings.
- * Sections: Hero, Countries, Categories, Featured, High Yield, AI Insights, Partners
+ * The investor home feed. Structured as a stack of horizontal rails
+ * rather than one long vertical page, which is what makes it read as a
+ * mobile app instead of a scrolled-down website.
  *
- * TODO: Connect to backend API for real data
- * TODO: Add pull-to-refresh
- * TODO: Add search functionality
- * TODO: Implement favorites persistence
+ * Rails: featured · Madinah · new · high potential · AI insights ·
+ * popular cities · verified partners · recently viewed.
+ *
+ * The country chips are not decorative — they filter the listing rails
+ * in place, and each rail hides itself when the active filter leaves it
+ * empty, so the screen never shows an empty row.
+ *
+ * TODO: Replace the demo catalogue with the listings API
  */
 
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ImageBackground,
-} from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import Animated, { FadeIn, FadeInDown, FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
-import { Images } from '@/constants/images';
 import { AppConfig } from '@/constants/config';
+import { Images } from '@/constants/images';
 import {
+  aiInsights,
+  categories,
+  cities,
+  countries,
+  countPropertiesByCity,
+  countPropertiesByType,
   featuredProperties,
   highYieldProperties,
+  madinahProperties,
+  newestProperties,
+  properties,
+  recentlyViewedProperties,
   verifiedPartners,
-  countries,
-  categories,
-  aiInsights,
 } from '@/constants/mockData';
-import { LogoMark, SectionHeader, AppIcon, LanguageButton } from '@/components/ui';
-import { PropertyCard } from '@/components/home/PropertyCard';
-import { HighYieldCard } from '@/components/home/HighYieldCard';
-import { PartnerCard } from '@/components/home/PartnerCard';
-import { InsightCard } from '@/components/home/InsightCard';
-import { CategoryCard } from '@/components/home/CategoryCard';
+import {
+  cityNameKey,
+  countryNameKey,
+  propertyTypePluralKey,
+} from '@/constants/localizedData';
+import {
+  AppIcon,
+  Badge,
+  Button,
+  LogoMark,
+  RemoteImage,
+  SectionHeader,
+} from '@/components/ui';
+import {
+  CategoryCard,
+  CityCard,
+  InsightCard,
+  PartnerCard,
+  PropertyCompactCard,
+  PropertyPosterCard,
+  PropertyRow,
+} from '@/components/cards';
 import { useLanguage } from '@/context/LanguageContext';
-import { categoryNameKey, countryNameKey } from '@/constants/localizedData';
+import { useNotifications } from '@/context/NotificationsContext';
+import { useTabReselect } from '@/context/TabRefreshContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function HomeScreen() {
+  const styles = useStyles();
+  const { colors, gradients } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [selectedCountry, setSelectedCountry] = useState('all');
+  const { unreadCount } = useNotifications();
+
+  const [country, setCountry] = useState('all');
+  const scrollRef = useRef<ScrollView>(null);
+
+  useTabReselect('home', useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []));
+
+  // One predicate drives every rail, so the chips filter the whole feed
+  const matchesCountry = useMemo(
+    () => (countryCode: string) => country === 'all' || countryCode === country,
+    [country]
+  );
+
+  const featured = featuredProperties.filter((p) => matchesCountry(p.countryCode));
+  const madinah = madinahProperties.filter((p) => matchesCountry(p.countryCode));
+  const newest = newestProperties.filter((p) => matchesCountry(p.countryCode));
+  const highYield = highYieldProperties.filter((p) => matchesCountry(p.countryCode)).slice(0, 3);
+  const cityList = cities.filter((c) => matchesCountry(c.countryCode));
+  const partners = verifiedPartners.filter((p) => matchesCountry(p.countryCode));
+
+  const goToExplore = (params?: Record<string, string>) =>
+    router.push({ pathname: '/(main)/explore', params });
 
   return (
     <View style={styles.container}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 96 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ============================================ */}
+        {/* ---------------------------------------- */}
         {/* HEADER */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeIn.delay(100)} style={styles.header}>
-          <View style={styles.headerLeft}>
-            <LogoMark size="small" showShadow />
-            <View>
-              <Text style={styles.headerTitle}>{AppConfig.appName}</Text>
-              <Text style={styles.headerSubtitle}>{t('homeSubtitle')}</Text>
-            </View>
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeIn.duration(300)} style={styles.header}>
+          <View style={styles.brand}>
+            <LogoMark size="small" showShadow={false} />
+            <Text style={styles.brandName} numberOfLines={1} ellipsizeMode="tail">
+              {AppConfig.appName}
+            </Text>
           </View>
-          <View style={styles.headerRight}>
-            {/* Language switcher — available without leaving the Home tab */}
-            <LanguageButton />
 
-            {/* TODO: Connect to notifications */}
-            <TouchableOpacity style={styles.notificationButton}>
-              <AppIcon name="notification" size="lg" color={theme.colors.textDark} />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* ============================================ */}
-        {/* HERO CARD */}
-        {/* TODO: Replace with production image */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(200)} style={styles.heroContainer}>
-          <ImageBackground
-            source={{ uri: Images.hero.home }}
-            style={styles.heroImage}
-            imageStyle={styles.heroImageStyle}
-          >
-            <LinearGradient
-              colors={theme.gradients.darkOverlay}
-              locations={[0.2, 0.5, 1]}
-              style={styles.heroGradient}
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push('/(main)/notifications')}
+              accessibilityRole="button"
+              accessibilityLabel={t('notifications')}
+              style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}
             >
-              <BlurView intensity={20} tint="dark" style={styles.heroBadge}>
-                <AppIcon name="star" size="sm" color={theme.colors.accent} />
-                <Text style={styles.heroBadgeText}>{t('investorEdition')}</Text>
-              </BlurView>
-
-              <Text style={styles.heroTitle}>{t('heroTitle')}</Text>
-              <Text style={styles.heroSubtitle}>{t('heroSubtitle')}</Text>
-
-              <TouchableOpacity style={styles.heroButton} activeOpacity={0.9}>
-                <LinearGradient
-                  colors={theme.gradients.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.heroButtonGradient}
-                >
-                  <Text style={styles.heroButtonText}>{t('exploreInvestments')}</Text>
-                  <AppIcon name="arrowForward" size="md" color={theme.colors.textDark} />
-                </LinearGradient>
-              </TouchableOpacity>
-            </LinearGradient>
-          </ImageBackground>
+              <AppIcon name="notification" size="md" color={colors.text} />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText} numberOfLines={1}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(main)/profile')}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile')}
+              style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}
+            >
+              <AppIcon name="profile" size="md" color={colors.text} />
+            </Pressable>
+          </View>
         </Animated.View>
 
-        {/* ============================================ */}
-        {/* COUNTRY CHIPS */}
-        {/* TODO: Add/remove countries in mockData.ts */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInRight.delay(300)}>
+        {/* ---------------------------------------- */}
+        {/* HERO */}
+        {/* Deliberately short — a full-height hero is a website habit. */}
+        {/* ---------------------------------------- */}
+        <Animated.View entering={FadeInDown.delay(80)} style={styles.heroWrap}>
+          <RemoteImage uri={Images.hero.home} style={styles.heroImage} />
+          <LinearGradient
+            colors={gradients.darkOverlay}
+            locations={[0.1, 0.5, 1]}
+            style={styles.heroOverlay}
+          >
+            <Badge label={t('investorEdition')} tone="onImage" icon="star" small />
+            <Text style={styles.heroTitle} numberOfLines={2} ellipsizeMode="tail">
+              {t('heroTitle')}
+            </Text>
+            <Text style={styles.heroSubtitle} numberOfLines={2} ellipsizeMode="tail">
+              {t('heroSubtitle')}
+            </Text>
+            <Button
+              title={t('exploreInvestments')}
+              onPress={() => goToExplore()}
+              variant="gold"
+              size="md"
+              iconRight="arrowForward"
+              fullWidth={false}
+              style={styles.heroButton}
+            />
+          </LinearGradient>
+        </Animated.View>
+
+        {/* ---------------------------------------- */}
+        {/* COUNTRY FILTER */}
+        {/* ---------------------------------------- */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
+          {countries.map((item) => {
+            const active = country === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setCountry(item.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
+                  styles.chip,
+                  active && styles.chipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.chipFlag}>{item.flag}</Text>
+                <Text
+                  style={[styles.chipLabel, active && styles.chipLabelActive]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {t(countryNameKey(item.id))}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* ---------------------------------------- */}
+        {/* CATEGORIES */}
+        {/* ---------------------------------------- */}
+        <View style={styles.section}>
+          <SectionHeader
+            title={t('categories')}
+            actionText={t('seeAll')}
+            onActionPress={() => goToExplore()}
+          />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.countryContainer}
+            contentContainerStyle={styles.rail}
           >
-            {countries.map((country) => (
-              <TouchableOpacity
-                key={country.id}
-                style={[
-                  styles.countryChip,
-                  selectedCountry === country.id && styles.countryChipActive,
-                ]}
-                onPress={() => setSelectedCountry(country.id)}
-              >
-                <Text style={styles.countryFlag}>{country.flag}</Text>
-                <Text
-                  style={[
-                    styles.countryName,
-                    selectedCountry === country.id && styles.countryNameActive,
-                  ]}
-                >
-                  {t(countryNameKey(country.id))}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* ============================================ */}
-        {/* CATEGORIES */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
-          <SectionHeader title={t('categories')} actionText={t('seeAll')} />
-          <View style={styles.categoriesGrid}>
             {categories.map((category) => (
               <CategoryCard
                 key={category.id}
-                name={t(categoryNameKey(category.id))}
+                name={t(propertyTypePluralKey(category.id))}
                 icon={category.icon}
-                count={category.count}
-              />
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* ============================================ */}
-        {/* FEATURED PROPERTIES */}
-        {/* TODO: Replace mock property data */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(500)} style={styles.section}>
-          <SectionHeader
-            title={t('featuredProperties')}
-            subtitle={t('handpickedInvestments')}
-            actionText={t('viewAll')}
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.propertiesContainer}
-          >
-            {featuredProperties.map((property) => (
-              <PropertyCard
-                key={property.id}
-                id={property.id}
-                title={property.title}
-                location={property.location}
-                price={property.price}
-                roi={property.roi}
-                image={property.image}
-                verified={property.verified}
-                favorite={property.favorite}
-                onPress={() => router.push(`/(main)/property/${property.id}`)}
+                count={countPropertiesByType(category.id)}
+                onPress={() => goToExplore({ type: category.id })}
               />
             ))}
           </ScrollView>
-        </Animated.View>
+        </View>
 
-        {/* ============================================ */}
-        {/* HIGH YIELD OPPORTUNITIES */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(600)} style={styles.section}>
-          <SectionHeader
-            title={t('highYieldOpportunities')}
-            subtitle={t('bestRoiPotential')}
-            actionText={t('explore')}
-          />
-          <View style={styles.highYieldContainer}>
-            {highYieldProperties.map((property) => (
-              <HighYieldCard
-                key={property.id}
-                id={property.id}
-                title={property.title}
-                location={property.location}
-                price={property.price}
-                roi={property.roi}
-                image={property.image}
-                onPress={() => router.push(`/(main)/property/${property.id}`)}
-              />
-            ))}
+        {/* ---------------------------------------- */}
+        {/* FEATURED */}
+        {/* ---------------------------------------- */}
+        {featured.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(120)} style={styles.section}>
+            <SectionHeader
+              title={t('featuredProjects')}
+              subtitle={t('featuredProjectsSubtitle')}
+              actionText={t('viewAll')}
+              onActionPress={() => goToExplore()}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {featured.map((property) => (
+                <PropertyPosterCard key={property.id} property={property} />
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+
+        {/* ---------------------------------------- */}
+        {/* MADINAH */}
+        {/* ---------------------------------------- */}
+        {madinah.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('madinahProjects')}
+              subtitle={t('madinahProjectsSubtitle')}
+              actionText={t('seeAll')}
+              onActionPress={() => goToExplore({ city: 'madinah' })}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {madinah.map((property) => (
+                <PropertyCompactCard key={property.id} property={property} />
+              ))}
+            </ScrollView>
           </View>
-        </Animated.View>
+        )}
 
-        {/* ============================================ */}
-        {/* AI INVESTMENT INSIGHTS */}
-        {/* TODO: Connect to AI analysis API */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(700)} style={styles.section}>
-          <SectionHeader
-            title={t('aiInsights')}
-            subtitle={t('marketAnalysis')}
-          />
-          <View style={styles.insightsGrid}>
+        {/* ---------------------------------------- */}
+        {/* NEW LISTINGS */}
+        {/* ---------------------------------------- */}
+        {newest.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('newListings')}
+              subtitle={t('newListingsSubtitle')}
+              actionText={t('seeAll')}
+              onActionPress={() => goToExplore()}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {newest.map((property) => (
+                <PropertyCompactCard key={property.id} property={property} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ---------------------------------------- */}
+        {/* HIGH POTENTIAL */}
+        {/* ---------------------------------------- */}
+        {highYield.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('highPotential')}
+              subtitle={t('highPotentialSubtitle')}
+              actionText={t('explore')}
+              onActionPress={() => goToExplore()}
+            />
+            <View style={styles.list}>
+              {highYield.map((property) => (
+                <PropertyRow key={property.id} property={property} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ---------------------------------------- */}
+        {/* AI INSIGHTS */}
+        {/* ---------------------------------------- */}
+        <View style={styles.section}>
+          <SectionHeader title={t('aiInsights')} subtitle={t('marketAnalysis')} />
+          <View style={styles.insightGrid}>
             {aiInsights.map((insight) => (
               <InsightCard
                 key={insight.id}
-                label={insight.label}
-                value={insight.value}
+                label={t(insight.labelKey)}
+                // The risk tile stores a key so it translates like the rest
+                value={insight.id === '4' ? t('low') : insight.value}
                 trend={insight.trend}
-                color={insight.color}
+                tone={insight.tone}
               />
             ))}
           </View>
-        </Animated.View>
+          <Text style={styles.disclaimer} numberOfLines={3}>
+            {t('aiDisclaimer')}
+          </Text>
+        </View>
 
-        {/* ============================================ */}
+        {/* ---------------------------------------- */}
+        {/* POPULAR CITIES */}
+        {/* ---------------------------------------- */}
+        {cityList.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('popularCities')}
+              subtitle={t('popularCitiesSubtitle')}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {cityList.map((city) => (
+                <CityCard
+                  key={city.id}
+                  name={t(cityNameKey(city.id))}
+                  image={city.image}
+                  count={countPropertiesByCity(city.id)}
+                  onPress={() => goToExplore({ city: city.id })}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ---------------------------------------- */}
         {/* VERIFIED PARTNERS */}
-        {/* TODO: Replace with partner data from API */}
-        {/* ============================================ */}
-        <Animated.View entering={FadeInDown.delay(800)} style={[styles.section, styles.lastSection]}>
+        {/* ---------------------------------------- */}
+        {partners.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title={t('verifiedPartners')}
+              subtitle={t('verifiedPartnersSubtitle')}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {partners.map((partner) => (
+                <PartnerCard
+                  key={partner.id}
+                  partner={partner}
+                  onPress={() =>
+                    goToExplore({
+                      // Opening a partner filters Explore to their market
+                      country: partner.countryCode,
+                      verified: '1',
+                    })
+                  }
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ---------------------------------------- */}
+        {/* RECENTLY VIEWED */}
+        {/* ---------------------------------------- */}
+        <View style={[styles.section, styles.lastSection]}>
           <SectionHeader
-            title={t('verifiedPartners')}
-            subtitle={t('trustedProfessionals')}
-            actionText={t('allPartners')}
+            title={t('recentlyViewed')}
+            subtitle={t('recentlyViewedSubtitle')}
           />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.partnersContainer}
+            contentContainerStyle={styles.rail}
           >
-            {verifiedPartners.map((partner) => (
-              <PartnerCard
-                key={partner.id}
-                name={partner.name}
-                country={partner.country}
-                listings={partner.listings}
-                rating={partner.rating}
-                logo={partner.logo}
-              />
+            {recentlyViewedProperties.map((property) => (
+              <PropertyCompactCard key={property.id} property={property} />
             ))}
           </ScrollView>
-        </Animated.View>
+        </View>
+
+        <Text style={styles.footerNote} numberOfLines={2}>
+          {properties.length} {t('objectsShort')} · {t('demoExchangeRate')}
+        </Text>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
+    backgroundColor: t.colors.background,
   },
   content: {
-    paddingBottom: theme.spacing.section,
+    paddingBottom: t.spacing.section,
+  },
+  pressed: {
+    opacity: 0.75,
   },
 
-  // Header
+  // ---- Header ----
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    paddingVertical: theme.spacing.md,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingBottom: t.spacing.smd,
   },
-  headerLeft: {
+  brand: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.smd,
+    gap: t.spacing.sm,
+    // Yields width to the controls before it truncates
+    flexShrink: 1,
+    minWidth: 0,
   },
-  headerTitle: {
-    ...theme.typography.h4,
-    color: theme.colors.textDark,
+  brandName: {
+    flexShrink: 1,
+    minWidth: 0,
+    ...t.typography.h4,
+    color: t.colors.text,
   },
-  headerSubtitle: {
-    ...theme.typography.label,
-    color: theme.colors.textLight,
-  },
-  headerRight: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.smd,
+    gap: t.spacing.sm,
+    flexShrink: 0,
   },
-  notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.white,
+  bellButton: {
+    width: t.metrics.minTouch,
+    height: t.metrics.minTouch,
+    borderRadius: t.borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: t.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    position: 'relative',
+    borderColor: t.colors.border,
   },
-  notificationBadge: {
+  badge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.colors.error,
+    top: 5,
+    right: 5,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.colors.error,
     borderWidth: 2,
-    borderColor: theme.colors.white,
+    borderColor: t.colors.surface,
+  },
+  badgeText: {
+    ...t.typography.tiny,
+    fontSize: 9,
+    lineHeight: 12,
+    color: '#FFFFFF',
   },
 
-  // Hero
-  heroContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    marginBottom: theme.spacing.lg,
+  // ---- Hero ----
+  heroWrap: {
+    height: t.metrics.isSmall ? 210 : 240,
+    marginHorizontal: t.spacing.screenHorizontal,
+    borderRadius: t.borderRadius.hero,
+    overflow: 'hidden',
+    backgroundColor: t.colors.surfaceAlt,
   },
   heroImage: {
-    width: '100%',
-    height: 320,
-    borderRadius: theme.borderRadius.feature,
-    overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  heroImageStyle: {
-    borderRadius: theme.borderRadius.feature,
-  },
-  heroGradient: {
+  heroOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: theme.spacing.xl,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.accentOverlay.medium,
-  },
-  heroBadgeText: {
-    ...theme.typography.label,
-    color: theme.colors.accent,
+    padding: t.spacing.md,
+    gap: 6,
   },
   heroTitle: {
-    ...theme.typography.h2,
-    color: theme.colors.white,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.h2,
+    fontSize: t.metrics.isSmall ? 21 : t.typography.h2.fontSize,
+    color: t.colors.onDark,
+    marginTop: 2,
   },
   heroSubtitle: {
-    ...theme.typography.small,
-    color: theme.colors.textOnDarkMuted,
-    lineHeight: 22,
-    marginBottom: theme.spacing.lg,
+    ...t.typography.caption,
+    color: t.colors.onDarkMuted,
   },
   heroButton: {
-    alignSelf: 'flex-start',
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.gold,
-  },
-  heroButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  heroButtonText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.primary,
+    marginTop: 6,
   },
 
-  // Country chips
-  countryContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    paddingVertical: theme.spacing.sm,
-    gap: 10,
+  // ---- Chips ----
+  chipRow: {
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingVertical: t.spacing.md,
+    gap: t.spacing.sm,
   },
-  countryChip: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.full,
-    marginRight: 10,
+    gap: 6,
+    height: 40,
+    maxWidth: 200,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.borderRadius.full,
+    backgroundColor: t.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 8,
+    borderColor: t.colors.border,
   },
-  countryChipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
+  chipActive: {
+    backgroundColor: t.colors.primary,
+    borderColor: t.colors.primary,
   },
-  countryFlag: {
-    fontSize: 16,
+  chipFlag: {
+    fontSize: 15,
   },
-  countryName: {
-    ...theme.typography.small,
-    fontWeight: '500',
-    color: theme.colors.textDark,
+  chipLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+    ...t.typography.captionBold,
+    color: t.colors.text,
   },
-  countryNameActive: {
-    color: theme.colors.white,
+  chipLabelActive: {
+    color: t.colors.onPrimary,
   },
 
-  // Sections
+  // ---- Sections ----
   section: {
-    marginTop: theme.spacing.xxl,
+    marginTop: t.spacing.sectionGap,
   },
   lastSection: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.md,
   },
-  categoriesGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.lg,
+  rail: {
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingRight: t.spacing.md,
   },
-  propertiesContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
+  list: {
+    paddingHorizontal: t.spacing.screenHorizontal,
   },
-  highYieldContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-  },
-  insightsGrid: {
+  insightGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    gap: theme.spacing.smd,
+    gap: t.spacing.smd,
+    paddingHorizontal: t.spacing.screenHorizontal,
   },
-  partnersContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
+  disclaimer: {
+    ...t.typography.tiny,
+    color: t.colors.textMuted,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingTop: t.spacing.smd,
   },
-});
+  footerNote: {
+    ...t.typography.tiny,
+    color: t.colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingTop: t.spacing.lg,
+  },
+}));

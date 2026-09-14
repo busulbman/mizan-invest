@@ -3,24 +3,28 @@
  * MAIN TAB LAYOUT
  * ============================================
  *
- * Real Expo Router tab navigation for the investor area.
+ * Native bottom tabs: Explore · Reels · Home · News · AI Studio.
  *
- * Demo tabs: Home · Explore · Favorites · Profile
- * Reels and News are intentionally not part of the tab bar in this
- * phase; their screens will be added later.
+ * TAB LABEL OVERFLOW
+ * Five tabs on a 375pt screen leaves ~75pt per item, and Russian labels
+ * ("Уведомления") do not fit at the default size. The label is
+ * therefore set to 10pt, capped at one line and allowed to use the full
+ * item width — smaller than body text on purpose, which is normal for a
+ * tab bar, rather than letting it wrap or clip.
  *
- * property/[id] lives inside this group but is hidden from the tab bar
- * (href: null) and hides the bar while open, so the detail screen is
- * full-screen and the back button returns to the tab that opened it.
+ * Detail, notification, settings and gallery routes live in this group
+ * but are hidden from the bar (`href: null`) and hide it while open, so
+ * they present full-screen and back returns to the tab that opened them.
  */
 
 import { Tabs } from 'expo-router';
-import { ColorValue, Platform, StyleSheet } from 'react-native';
+import { ColorValue, Platform } from 'react-native';
 
-import { theme } from '@/theme';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { IconName } from '@/constants/icons';
 import { useLanguage } from '@/context/LanguageContext';
+import { MAIN_TAB_NAMES, MainTabName, TabRefreshProvider, useTabRefresh } from '@/context/TabRefreshContext';
+import { useTheme } from '@/context/ThemeContext';
 
 interface TabIconProps {
   name: IconName;
@@ -30,33 +34,71 @@ interface TabIconProps {
 }
 
 function TabIcon({ name, activeName, color, focused }: TabIconProps) {
-  return <AppIcon name={focused ? activeName : name} size="lg" color={color} />;
+  const isHome = name === 'home';
+  return (
+    <AppIcon
+      name={focused ? activeName : name}
+      size={isHome ? 26 : 24}
+      color={color}
+    />
+  );
 }
 
 export default function MainTabLayout() {
+  return (
+    <TabRefreshProvider>
+      <MainTabs />
+    </TabRefreshProvider>
+  );
+}
+
+function isMainTabName(name: string): name is MainTabName {
+  return MAIN_TAB_NAMES.includes(name as MainTabName);
+}
+
+function MainTabs() {
   const { t } = useLanguage();
+  const { colors, typography, metrics } = useTheme();
+  const { refreshTab } = useTabRefresh();
 
   return (
     <Tabs
-      screenOptions={{
+        screenListeners={({ route, navigation }) => ({
+          tabPress: () => {
+            const state = navigation.getState();
+            const activeRoute = state.routes[state.index];
+            if (activeRoute?.key === route.key && isMainTabName(route.name)) {
+              refreshTab(route.name);
+            }
+          },
+        })}
+        screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textMuted,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
-        sceneStyle: styles.scene,
-      }}
-    >
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: t('home'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="home" activeName="homeFilled" color={color} focused={focused} />
-          ),
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.bar,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          height: Platform.select({ ios: 86, default: 64 }),
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontFamily: typography.tiny.fontFamily,
+          fontSize: 10,
+          lineHeight: 13,
+          letterSpacing: 0,
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: metrics.isSmall ? 0 : 2,
+        },
+        // One line only — a wrapped label would push the icon upward
+        // and misalign the row.
+        tabBarLabelPosition: 'below-icon',
+        sceneStyle: { backgroundColor: colors.background },
         }}
-      />
+      >
       <Tabs.Screen
         name="explore"
         options={{
@@ -67,52 +109,58 @@ export default function MainTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="favorites"
+        name="reels"
         options={{
-          title: t('favorites'),
+          title: t('reels'),
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="favorite" activeName="favoriteFilled" color={color} focused={focused} />
+            <TabIcon name="reels" activeName="reelsFilled" color={color} focused={focused} />
           ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="home"
         options={{
-          title: t('profile'),
+          title: t('home'),
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="profile" activeName="profileFilled" color={color} focused={focused} />
+            <TabIcon name="home" activeName="homeFilled" color={color} focused={focused} />
+          ),
+          tabBarLabelStyle: {
+            fontSize: 10.5,
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="news"
+        options={{
+          title: t('news'),
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="news"
+              activeName="newsFilled"
+              color={color}
+              focused={focused}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="ai-studio"
+        options={{
+          title: "AI Studio",
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="ai" activeName="aiFilled" color={color} focused={focused} />
           ),
         }}
       />
 
-      {/* Detail route — reachable by push, never shown as a tab */}
-      <Tabs.Screen
-        name="property/[id]"
-        options={{ href: null, tabBarStyle: styles.hiddenTabBar }}
-      />
+      {/* These routes remain available from their in-app entry points. */}
+      <Tabs.Screen name="notifications" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="profile" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="favorites" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+
+      {/* Pushed routes — reachable by navigation, never shown as a tab */}
+      <Tabs.Screen name="property/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="settings" options={{ href: null, tabBarStyle: { display: 'none' } }} />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: theme.colors.white,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
-    height: Platform.select({ ios: 88, default: 64 }),
-    paddingTop: 8,
-  },
-  hiddenTabBar: {
-    display: 'none',
-  },
-  tabBarItem: {
-    paddingVertical: 4,
-  },
-  tabBarLabel: {
-    ...theme.typography.tiny,
-    marginTop: 2,
-  },
-  scene: {
-    backgroundColor: theme.colors.background,
-  },
-});

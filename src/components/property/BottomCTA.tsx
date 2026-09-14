@@ -1,157 +1,140 @@
 /**
  * ============================================
- * BOTTOM CTA COMPONENT
+ * STICKY BOTTOM CTA
  * ============================================
  *
- * Sticky bottom action bar.
- * Shows: Contact Partner + Save Property buttons
+ * Pinned action bar on the listing page: WhatsApp, call, and the primary
+ * "I'm interested" button.
  *
- * Used in: Property Detail Screen
+ * WhatsApp and call use real deep links (`whatsapp://`, `tel:`) with the
+ * partner's number, and fall back to an explanatory alert when the
+ * device cannot open them — a simulator, or a phone without WhatsApp.
+ * "I'm interested" confirms the request locally; there is no CRM or lead
+ * backend in this demo and none should be added here.
  *
- * TODO: Lead Generation System
- * TODO: CRM Tracking
- * TODO: Commission Tracking
- * TODO: Connect to messaging system
+ * The bar sits above the home indicator and blurs the content behind it,
+ * so the page keeps scrolling underneath instead of ending in a wall.
  */
 
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Alert, Linking, Platform, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { theme } from '@/theme';
-import { useLanguage } from '@/context/LanguageContext';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// ============================================
-// TYPES
-// ============================================
+import { Button, IconButton } from '@/components/ui';
+import { Partner } from '@/constants/mockData';
+import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export interface BottomCTAProps {
-  onContactPartner?: () => void;
-  onSaveProperty?: () => void;
-  isSaved?: boolean;
+  partner?: Partner;
+  /** Listing title, quoted in the pre-filled WhatsApp message */
+  propertyTitle: string;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
-
-export function BottomCTA({ onContactPartner, onSaveProperty, isSaved = false }: BottomCTAProps) {
+export function BottomCTA({ partner, propertyTitle }: BottomCTAProps) {
+  const styles = useStyles();
+  const { isDark } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
+  const openLink = async (url: string, fallbackTitle: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // Fall through to the explanatory alert below
+    }
+    Alert.alert(fallbackTitle, t('demoActionBody'));
+  };
+
+  const handleWhatsApp = () => {
+    if (!partner) return;
+    const message = encodeURIComponent(`${t('imInterested')}: ${propertyTitle}`);
+    const number = partner.whatsapp.replace(/[^\d]/g, '');
+    openLink(`whatsapp://send?phone=${number}&text=${message}`, t('whatsappContact'));
+  };
+
+  const handleCall = () => {
+    if (!partner) return;
+    openLink(`tel:${partner.phone.replace(/\s/g, '')}`, t('callPartner'));
+  };
+
+  const handleInterest = () => {
+    Alert.alert(t('requestSent'), t('requestSentBody'));
+  };
+
   return (
     <View style={styles.container}>
-      <BlurView intensity={80} tint="light" style={[styles.blur, { paddingBottom: insets.bottom + 8 }]}>
-        {/* Info text */}
-        <View style={styles.infoRow}>
-          <Text style={styles.infoText}>{t('interestedInProperty')}</Text>
-          <Text style={styles.infoSubtext}>{t('getInTouch')}</Text>
-        </View>
+      <BlurView
+        intensity={Platform.OS === 'ios' ? 60 : 0}
+        tint={isDark ? 'dark' : 'light'}
+        style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}
+      >
+        <Text style={styles.lead} numberOfLines={1} ellipsizeMode="tail">
+          {t('interestedInProperty')}
+        </Text>
 
-        {/* Action buttons */}
-        <View style={styles.buttonRow}>
-          {/* Save Property - Secondary */}
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={onSaveProperty}
-            activeOpacity={0.8}
-          >
-            <AppIcon
-              name={isSaved ? 'favoriteFilled' : 'favorite'}
-              size="md"
-              color={isSaved ? theme.colors.error : theme.colors.textDark}
-            />
-            <Text style={styles.saveText}>{t('saveProperty')}</Text>
-          </TouchableOpacity>
-
-          {/* Contact Partner - Primary */}
-          <TouchableOpacity
-            style={styles.contactButton}
-            onPress={onContactPartner}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={theme.gradients.gold}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.contactGradient}
-            >
-              <AppIcon name="message" size="md" color={theme.colors.primary} />
-              <Text style={styles.contactText}>{t('contactPartner')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+        <View style={styles.row}>
+          <IconButton
+            icon="whatsapp"
+            onPress={handleWhatsApp}
+            accessibilityLabel={t('whatsappContact')}
+            variant="surface"
+            size={52}
+          />
+          <IconButton
+            icon="call"
+            onPress={handleCall}
+            accessibilityLabel={t('callPartner')}
+            variant="surface"
+            size={52}
+          />
+          {/* Primary action takes the remaining width */}
+          <Button
+            title={t('imInterested')}
+            onPress={handleInterest}
+            variant="gold"
+            size="lg"
+            style={styles.primary}
+          />
         </View>
       </BlurView>
     </View>
   );
 }
 
-// ============================================
-// STYLES
-// ============================================
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    borderTopColor: t.colors.border,
+    // Android has no blur, so the bar needs a solid backing there
+    backgroundColor: t.colors.bar,
   },
-  blur: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    paddingTop: theme.spacing.md,
+  bar: {
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingTop: t.spacing.smd,
+    gap: t.spacing.sm,
   },
-  infoRow: {
-    marginBottom: theme.spacing.smd,
+  lead: {
+    ...t.typography.caption,
+    color: t.colors.textSecondary,
   },
-  infoText: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.textDark,
-  },
-  infoSubtext: {
-    ...theme.typography.caption,
-    color: theme.colors.textLight,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.smd,
-  },
-  saveButton: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.white,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 8,
+    gap: t.spacing.sm,
   },
-  saveText: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.textDark,
-  },
-  contactButton: {
+  primary: {
     flex: 1,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.gold,
+    minWidth: 0,
   },
-  contactGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
-  },
-  contactText: {
-    ...theme.typography.button,
-    color: theme.colors.primary,
-  },
-});
+}));
 
 export default BottomCTA;

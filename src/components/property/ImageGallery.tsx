@@ -1,216 +1,198 @@
 /**
  * ============================================
- * IMAGE GALLERY COMPONENT
+ * PROPERTY IMAGE GALLERY
  * ============================================
  *
- * Hero image with horizontal thumbnail gallery.
- * Used in: Property Detail Screen
+ * Swipeable hero photos with a counter and a thumbnail strip.
  *
- * TODO: Add full-screen image viewer
- * TODO: Add pinch-to-zoom functionality
- * TODO: Replace placeholder images with CDN URLs
+ * Tapping the hero — or any thumbnail that is already selected — opens
+ * the full-screen viewer with pinch, double-tap zoom and pan. The strip
+ * itself is for quick jumps between photos without leaving the page.
+ *
+ * Photos render through `RemoteImage`, so a dead URL shows the branded
+ * placeholder rather than an empty frame.
  */
 
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
+import { useRef, useState } from 'react';
+import { Dimensions, Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
+import { AppIcon } from '@/components/ui/AppIcon';
+import { Badge } from '@/components/ui/Badge';
+import { RemoteImage } from '@/components/ui/RemoteImage';
+import { FullscreenGallery } from '@/components/media/FullscreenGallery';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
-const { width } = Dimensions.get('window');
-const HERO_HEIGHT = 400;
-const THUMBNAIL_SIZE = 70;
-
-// ============================================
-// TYPES
-// ============================================
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HERO_HEIGHT = 360;
+const THUMB_SIZE = 62;
 
 export interface ImageGalleryProps {
   images: string[];
   verified?: boolean;
-  onImagePress?: (index: number) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
-
-export function ImageGallery({ images, verified = false, onImagePress }: ImageGalleryProps) {
+export function ImageGallery({ images, verified = false }: ImageGalleryProps) {
+  const styles = useStyles();
+  const { gradients, colors } = useTheme();
   const { t } = useLanguage();
-  const [activeIndex, setActiveIndex] = useState(0);
 
-  const handleThumbnailPress = (index: number) => {
-    setActiveIndex(index);
+  const scrollRef = useRef<ScrollView>(null);
+  const [index, setIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
+
+  const goTo = (next: number) => {
+    setIndex(next);
+    scrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
   };
 
   return (
     <View style={styles.container}>
-      {/* Hero Image */}
-      <Animated.View entering={FadeIn.duration(500)} style={styles.heroContainer}>
-        {/* TODO: Replace with production image */}
-        <Image
-          source={{ uri: images[activeIndex] }}
-          style={styles.heroImage}
-          resizeMode="cover"
-        />
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) =>
+          setIndex(Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH))
+        }
+      >
+        {images.map((uri, i) => (
+          <Pressable
+            key={`${uri}-${i}`}
+            onPress={() => setViewerOpen(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={t('photos')}
+            style={styles.heroPage}
+          >
+            <RemoteImage uri={uri} style={styles.heroImage} />
+          </Pressable>
+        ))}
+      </ScrollView>
 
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={['transparent', 'rgba(15, 23, 42, 0.3)', 'rgba(15, 23, 42, 0.7)']}
-          locations={[0.5, 0.75, 1]}
-          style={styles.heroGradient}
-        />
+      {/* Bottom scrim so the sheet corners below read cleanly */}
+      <LinearGradient
+        colors={['transparent', 'rgba(8, 13, 24, 0.55)']}
+        style={styles.bottomScrim}
+        pointerEvents="none"
+      />
 
-        {/* Verified badge */}
-        {verified && (
-          <View style={styles.verifiedBadge}>
-            <BlurView intensity={40} tint="dark" style={styles.verifiedBlur}>
-              <Text style={styles.verifiedIcon}>✓</Text>
-              <Text style={styles.verifiedText}>{t('verifiedProperty')}</Text>
-            </BlurView>
-          </View>
-        )}
-
-        {/* Image counter */}
-        <View style={styles.counterBadge}>
-          <BlurView intensity={40} tint="dark" style={styles.counterBlur}>
-            <Text style={styles.counterText}>
-              {activeIndex + 1} / {images.length}
-            </Text>
-          </BlurView>
+      {/* Verified marker */}
+      {verified && (
+        <View style={styles.verifiedSlot} pointerEvents="none">
+          <Badge label={t('verifiedProperty')} tone="onImage" icon="verified" small />
         </View>
-      </Animated.View>
+      )}
 
-      {/* Thumbnail Gallery */}
+      {/* Counter + expand affordance */}
+      <Pressable
+        onPress={() => setViewerOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={t('photos')}
+        style={styles.counter}
+      >
+        <AppIcon name="expand" size="xs" color={colors.onDark} />
+        <Text style={styles.counterText} numberOfLines={1}>
+          {index + 1} / {images.length}
+        </Text>
+      </Pressable>
+
+      {/* Thumbnails */}
       {images.length > 1 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.thumbnailContainer}
+          contentContainerStyle={styles.thumbRow}
         >
-          {images.map((image, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.thumbnail,
-                activeIndex === index && styles.thumbnailActive,
-              ]}
-              onPress={() => handleThumbnailPress(index)}
-              activeOpacity={0.8}
+          {images.map((uri, i) => (
+            <Pressable
+              key={`thumb-${uri}-${i}`}
+              onPress={() => (i === index ? setViewerOpen(true) : goTo(i))}
+              accessibilityRole="button"
+              accessibilityState={{ selected: i === index }}
+              style={[styles.thumb, i === index && styles.thumbActive]}
             >
-              <Image source={{ uri: image }} style={styles.thumbnailImage} />
-              {activeIndex === index && <View style={styles.thumbnailOverlay} />}
-            </TouchableOpacity>
+              <RemoteImage uri={uri} style={styles.thumbImage} />
+            </Pressable>
           ))}
         </ScrollView>
       )}
+
+      <FullscreenGallery
+        visible={viewerOpen}
+        images={images}
+        initialIndex={index}
+        onClose={() => setViewerOpen(false)}
+      />
     </View>
   );
 }
 
-// ============================================
-// STYLES
-// ============================================
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.backgroundDark,
   },
-  heroContainer: {
-    width,
+  heroPage: {
+    width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
-    position: 'relative',
   },
   heroImage: {
     width: '100%',
     height: '100%',
   },
-  heroGradient: {
+  bottomScrim: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    height: 200,
+    // Sits above the thumbnail strip, over the hero only
+    top: HERO_HEIGHT - 110,
+    height: 110,
   },
-  verifiedBadge: {
+  verifiedSlot: {
     position: 'absolute',
-    top: 60,
-    left: theme.spacing.screenHorizontal,
-    borderRadius: theme.borderRadius.full,
-    overflow: 'hidden',
+    // Photo bottom-left: clear of the safe-area controls at the top.
+    top: HERO_HEIGHT - 50,
+    left: t.spacing.screenHorizontal,
+    // Leaves room for the floating back / action buttons
+    maxWidth: SCREEN_WIDTH - t.spacing.screenHorizontal * 2 - 120,
   },
-  verifiedBlur: {
+  counter: {
+    position: 'absolute',
+    right: t.spacing.screenHorizontal,
+    top: HERO_HEIGHT - 50,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: theme.colors.successOverlay.medium,
-  },
-  verifiedIcon: {
-    fontSize: 12,
-    color: theme.colors.success,
-  },
-  verifiedText: {
-    ...theme.typography.label,
-    color: theme.colors.success,
-  },
-  counterBadge: {
-    position: 'absolute',
-    top: 60,
-    right: theme.spacing.screenHorizontal,
-    borderRadius: theme.borderRadius.sm,
-    overflow: 'hidden',
-  },
-  counterBlur: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+    gap: 5,
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: t.borderRadius.sm,
+    backgroundColor: 'rgba(8, 13, 24, 0.6)',
   },
   counterText: {
-    ...theme.typography.label,
-    color: theme.colors.white,
+    ...t.typography.tiny,
+    color: t.colors.onDark,
   },
-  thumbnailContainer: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.sm,
+  thumbRow: {
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingVertical: t.spacing.smd,
+    gap: t.spacing.sm,
   },
-  thumbnail: {
-    width: THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
-    borderRadius: theme.borderRadius.md,
+  thumb: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: t.borderRadius.md,
     overflow: 'hidden',
-    marginRight: theme.spacing.sm,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  thumbnailActive: {
-    borderColor: theme.colors.accent,
+  thumbActive: {
+    borderColor: t.colors.accent,
   },
-  thumbnailImage: {
+  thumbImage: {
     width: '100%',
     height: '100%',
   },
-  thumbnailOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(212, 180, 131, 0.2)',
-  },
-});
+}));
 
 export default ImageGallery;

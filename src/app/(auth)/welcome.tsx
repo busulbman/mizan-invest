@@ -1,250 +1,200 @@
 /**
  * ============================================
- * WELCOME SCREEN
+ * WELCOME
  * ============================================
  *
- * Auth choice screen after onboarding.
- * Users can continue as guest, investor, or partner.
+ * The choice screen after onboarding: continue as guest, sign in as an
+ * investor, or enter the partner portal.
  *
- * TODO: Add biometric login option
- * TODO: Remember last login method
+ * Always dark — it sits on photography in both appearances, so the copy
+ * is white and the controls are glass. The language switcher is here
+ * because this is the first screen where someone in the room might want
+ * to change it before the walkthrough starts.
+ *
+ * The content column is a ScrollView so that on a small phone the third
+ * button and the footnote stay reachable instead of being clipped.
  */
 
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
 import { Images } from '@/constants/images';
-import { LogoMark, LanguageSelector, AppIcon } from '@/components/ui';
+import { AppIcon, Badge, Button, LanguagePicker, LogoMark, RemoteImage } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function WelcomeScreen() {
+  const styles = useStyles();
+  const { colors, gradients } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.container}>
-      {/* TODO: Replace with production image */}
-      <ImageBackground
-        source={{ uri: Images.hero.welcome }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
+      <RemoteImage uri={Images.hero.welcome} style={styles.background} />
+
+      <LinearGradient
+        colors={gradients.heroOverlay}
+        locations={[0, 0.3, 0.62, 0.88]}
+        style={styles.fill}
       >
-        <LinearGradient
-          colors={[
-            'rgba(15, 23, 42, 0.3)',
-            'rgba(15, 23, 42, 0.5)',
-            'rgba(15, 23, 42, 0.85)',
-            theme.colors.primary,
-          ]}
-          locations={[0, 0.3, 0.6, 0.85]}
-          style={styles.gradient}
+        {/* Language switcher */}
+        <Animated.View
+          entering={FadeIn.delay(150)}
+          style={[styles.header, { paddingTop: insets.top + 12 }]}
         >
-          {/* Language selector */}
-          <Animated.View
-            entering={FadeIn.delay(200)}
-            style={[styles.header, { paddingTop: insets.top + 16 }]}
-          >
-            <LanguageSelector />
+          <LanguagePicker variant="glass" />
+        </Animated.View>
+
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View entering={FadeInDown.delay(220).duration(600)} style={styles.brand}>
+            <LogoMark size="large" showShadow />
+            <Text
+              style={styles.appName}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              {t('appName')}
+            </Text>
           </Animated.View>
 
-          <View style={styles.content}>
-            {/* Logo section */}
-            <Animated.View entering={FadeInDown.delay(300).duration(800)} style={styles.logoSection}>
-              <LogoMark size="large" showShadow />
-              <Text style={styles.appName}>{t('appName')}</Text>
-            </Animated.View>
+          <Animated.View entering={FadeInUp.delay(360).duration(600)} style={styles.hero}>
+            <Text style={styles.title} numberOfLines={3} ellipsizeMode="tail">
+              {t('welcomeTitle')}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={4} ellipsizeMode="tail">
+              {t('welcomeSubtitle')}
+            </Text>
+          </Animated.View>
 
-            {/* Hero text */}
-            <Animated.View entering={FadeInUp.delay(500).duration(800)} style={styles.heroSection}>
-              <Text style={styles.title}>{t('welcomeTitle')}</Text>
-              <Text style={styles.subtitle}>{t('welcomeSubtitle')}</Text>
-            </Animated.View>
+          <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.actions}>
+            <Button
+              title={t('continueAsGuest')}
+              onPress={() => router.replace('/(main)/home')}
+              variant="gold"
+              size="lg"
+            />
 
-            {/* Action buttons */}
-            <Animated.View
-              entering={FadeInUp.delay(700).duration(800)}
-              style={[styles.actionsSection, { paddingBottom: insets.bottom + 32 }]}
-            >
-              {/* Primary: Continue as Guest */}
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => router.replace('/(main)/home')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={theme.gradients.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.primaryButtonGradient}
-                >
-                  <Text style={styles.primaryButtonText}>{t('continueAsGuest')}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+            <Button
+              title={t('investorLogin')}
+              onPress={() => router.push('/(auth)/investor-login')}
+              variant="glass"
+              size="lg"
+              icon="wallet"
+              iconRight="arrowForward"
+            />
 
-              {/* Secondary buttons */}
-              <View style={styles.secondaryButtons}>
-                {/* Investor Login */}
-                <TouchableOpacity
-                  style={styles.glassButton}
-                  onPress={() => router.push('/(auth)/investor-login')}
-                  activeOpacity={0.8}
-                >
-                  <BlurView intensity={20} tint="dark" style={styles.glassButtonInner}>
-                    <View style={styles.buttonIconContainer}>
-                      <AppIcon name="wallet" size="md" color={theme.colors.accent} />
-                    </View>
-                    <Text style={styles.glassButtonText}>{t('investorLogin')}</Text>
-                    <AppIcon name="arrowForward" size="md" color={theme.colors.textOnDarkMuted} />
-                  </BlurView>
-                </TouchableOpacity>
-
-                {/* Partner Login */}
-                <TouchableOpacity
-                  style={styles.glassButton}
-                  onPress={() => router.push('/(auth)/partner-login')}
-                  activeOpacity={0.8}
-                >
-                  <BlurView intensity={20} tint="dark" style={styles.glassButtonInner}>
-                    <View style={[styles.buttonIconContainer, styles.partnerIcon]}>
-                      <AppIcon name="building" size="md" color={theme.colors.success} />
-                    </View>
-                    <Text style={styles.glassButtonText}>{t('partnerLogin')}</Text>
-                    <View style={styles.exclusiveBadge}>
-                      <Text style={styles.exclusiveBadgeText}>PRO</Text>
-                    </View>
-                  </BlurView>
-                </TouchableOpacity>
+            {/* Partner entry carries the PRO marker */}
+            <View style={styles.partnerWrap}>
+              <Button
+                title={t('partnerLogin')}
+                onPress={() => router.push('/(auth)/partner-login')}
+                variant="glass"
+                size="lg"
+                icon="building"
+              />
+              <View style={styles.proBadge} pointerEvents="none">
+                <Badge label="PRO" tone="accent" small />
               </View>
+            </View>
 
-              <Text style={styles.note}>{t('partnerNote')}</Text>
-            </Animated.View>
-          </View>
-        </LinearGradient>
-      </ImageBackground>
+            <View style={styles.noteRow}>
+              <AppIcon name="security" size="xs" color={colors.onDarkMuted} />
+              <Text style={styles.note} numberOfLines={2} ellipsizeMode="tail">
+                {t('partnerNote')}
+              </Text>
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </LinearGradient>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.backgroundDark,
   },
-  backgroundImage: {
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  fill: {
     flex: 1,
   },
-  gradient: {
-    flex: 1,
-  },
+
   header: {
-    paddingHorizontal: theme.spacing.screenHorizontal,
+    paddingHorizontal: t.spacing.screenHorizontal,
     alignItems: 'flex-end',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.xl,
+    paddingTop: t.spacing.xl,
   },
-  logoSection: {
+  brand: {
     alignItems: 'center',
-    paddingTop: 40,
+    gap: t.spacing.smd,
   },
   appName: {
-    ...theme.typography.h2,
-    color: theme.colors.white,
-    marginTop: theme.spacing.md,
-    letterSpacing: 1,
+    ...t.typography.h2,
+    color: t.colors.onDark,
+    textAlign: 'center',
   },
-  heroSection: {
+  hero: {
     alignItems: 'center',
+    paddingVertical: t.spacing.xl,
   },
   title: {
-    fontSize: 38,
-    fontWeight: '700',
-    color: theme.colors.white,
+    ...t.typography.hero,
+    fontSize: t.metrics.isSmall ? 28 : 34,
+    lineHeight: t.metrics.isSmall ? 36 : 42,
+    color: t.colors.onDark,
     textAlign: 'center',
-    lineHeight: 46,
-    letterSpacing: -0.5,
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.smd,
   },
   subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.body,
+    color: t.colors.onDarkMuted,
     textAlign: 'center',
-    paddingHorizontal: theme.spacing.md,
   },
-  actionsSection: {
-    gap: theme.spacing.md,
+  actions: {
+    gap: t.spacing.smd,
   },
-  primaryButton: {
-    borderRadius: theme.borderRadius.xl,
-    overflow: 'hidden',
-    ...theme.shadows.gold,
+  partnerWrap: {
+    position: 'relative',
   },
-  primaryButtonGradient: {
-    paddingVertical: 20,
-    alignItems: 'center',
+  proBadge: {
+    position: 'absolute',
+    right: t.spacing.md,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
   },
-  primaryButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.primary,
-    letterSpacing: 0.3,
-  },
-  secondaryButtons: {
-    gap: theme.spacing.smd,
-  },
-  glassButton: {
-    borderRadius: theme.borderRadius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
-  },
-  glassButtonInner: {
+  noteRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-  },
-  buttonIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.accentOverlay.light,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
-  },
-  partnerIcon: {
-    backgroundColor: theme.colors.successOverlay.light,
-  },
-  glassButtonText: {
-    flex: 1,
-    ...theme.typography.bodyBold,
-    color: theme.colors.white,
-    letterSpacing: 0.2,
-  },
-  exclusiveBadge: {
-    backgroundColor: theme.colors.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.xs,
-  },
-  exclusiveBadgeText: {
-    ...theme.typography.tiny,
-    color: theme.colors.primary,
-    letterSpacing: 0.5,
+    gap: 5,
+    marginTop: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
   },
   note: {
-    ...theme.typography.caption,
-    color: 'rgba(255, 255, 255, 0.4)',
+    flexShrink: 1,
+    ...t.typography.tiny,
+    color: t.colors.onDarkMuted,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
   },
-});
+}));

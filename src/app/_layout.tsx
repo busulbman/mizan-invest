@@ -4,63 +4,85 @@
  * ============================================
  *
  * Provider order (outermost first):
- *   GestureHandlerRootView  → required by react-native-gesture-handler
- *   LanguageProvider        → global language + persisted preference
- *   Stack                   → route groups
+ *   GestureHandlerRootView → required by react-native-gesture-handler
+ *   LanguageProvider       → language + persisted preference
+ *   ThemeProvider          → appearance; reads language for the Arabic
+ *                            font stack, so it must sit inside it
+ *   CurrencyProvider       → display currency
+ *   FavoritesProvider      → shared saved-listing state
+ *   NotificationsProvider  → in-app notification centre
  *
- * Note: SafeAreaProvider is already supplied by expo-router's ExpoRoot,
- * so it is intentionally not duplicated here. Screens can call
- * useSafeAreaInsets() directly.
+ * SafeAreaProvider comes from expo-router's ExpoRoot, so it is not
+ * duplicated here — screens call useSafeAreaInsets() directly.
  *
- * Rendering is held back until the stored language is restored, which
- * prevents a brief flash of the fallback language on cold start. The
- * placeholder uses the same dark colour as the splash screen so the
- * transition stays seamless.
+ * Rendering is held back until both the stored language and the custom
+ * fonts are ready. Without that the first frame would paint in the
+ * fallback language and the system font, then visibly reflow.
  */
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
+import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { fontAssets } from '@/theme/fonts';
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
-import { theme } from '@/theme';
+import { ThemeProvider, makeStyles, useTheme } from '@/context/ThemeContext';
+import { CurrencyProvider } from '@/context/CurrencyContext';
+import { FavoritesProvider } from '@/context/FavoritesContext';
+import { NotificationsProvider } from '@/context/NotificationsContext';
 
 function RootNavigator() {
+  const styles = useStyles();
   const { isReady } = useLanguage();
+  const { isDark, colors } = useTheme();
+  const [fontsLoaded] = useFonts(fontAssets);
 
-  if (!isReady) {
-    // Matches the splash background so no white frame appears
+  if (!isReady || !fontsLoaded) {
+    // Same colour as the splash so the handover shows no white flash
     return <View style={styles.placeholder} />;
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(main)" />
-      <Stack.Screen name="(partner)" />
-    </Stack>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(main)" />
+        <Stack.Screen name="(partner)" />
+      </Stack>
+    </>
   );
 }
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <LanguageProvider>
-        <StatusBar style="auto" />
-        <RootNavigator />
+        <ThemeProvider>
+          <CurrencyProvider>
+            <FavoritesProvider>
+              <NotificationsProvider>
+                <RootNavigator />
+              </NotificationsProvider>
+            </FavoritesProvider>
+          </CurrencyProvider>
+        </ThemeProvider>
       </LanguageProvider>
     </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+const useStyles = makeStyles((t) => ({
   placeholder: {
     flex: 1,
-    backgroundColor: theme.colors.backgroundDark,
+    backgroundColor: t.colors.backgroundDark,
   },
-});
+}));

@@ -1,45 +1,29 @@
 /**
  * ============================================
- * SECTION HEADER COMPONENT
+ * SECTION HEADER
  * ============================================
  *
- * Header for content sections with title and action.
- * Used for: Home screen sections, lists, etc.
+ * Title + optional subtitle on the left, optional action on the right.
+ * Used above every Home rail and every block on the detail screen.
  *
- * Usage:
- * <SectionHeader title="Featured Properties" />
- * <SectionHeader title="Partners" subtitle="Verified" actionText="See all" />
+ * The text column takes the remaining width and wraps to two lines; the
+ * action never shrinks below its own label. This is what stops a long
+ * Russian heading from pushing "Смотреть все" off the screen edge.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
-import { theme } from '@/theme';
-import { AppIcon } from './AppIcon';
+import { Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 
-// ============================================
-// TYPES
-// ============================================
+import { AppIcon } from './AppIcon';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export interface SectionHeaderProps {
-  /** Section title */
   title: string;
-
-  /** Optional subtitle */
   subtitle?: string;
-
-  /** Action button text */
+  /** Renders the right-hand action only when both props are given */
   actionText?: string;
-
-  /** Action button press handler */
   onActionPress?: () => void;
-
-  /** Custom container style */
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
-
-// ============================================
-// COMPONENT
-// ============================================
 
 export function SectionHeader({
   title,
@@ -48,62 +32,80 @@ export function SectionHeader({
   onActionPress,
   style,
 }: SectionHeaderProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+
+  const showAction = Boolean(actionText && onActionPress);
+
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.textContainer}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      <View style={styles.textColumn}>
+        <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+          {title}
+        </Text>
+        {subtitle && (
+          <Text style={styles.subtitle} numberOfLines={2} ellipsizeMode="tail">
+            {subtitle}
+          </Text>
+        )}
       </View>
 
-      {actionText && (
-        <TouchableOpacity onPress={onActionPress} style={styles.actionButton}>
-          <Text style={styles.actionText}>{actionText}</Text>
-          <AppIcon name="arrowForward" size="sm" color={theme.colors.accent} />
-        </TouchableOpacity>
+      {showAction && (
+        <Pressable
+          onPress={onActionPress}
+          accessibilityRole="button"
+          accessibilityLabel={actionText}
+          hitSlop={8}
+          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+        >
+          <Text style={styles.actionText} numberOfLines={1}>
+            {actionText}
+          </Text>
+          <AppIcon name="arrowForward" size="xs" color={colors.accent} />
+        </Pressable>
       )}
     </View>
   );
 }
 
-// ============================================
-// STYLES
-// ============================================
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: theme.spacing.screenHorizontal,
-    marginBottom: theme.spacing.md,
+    alignItems: 'center',
+    gap: t.spacing.smd,
+    paddingHorizontal: t.spacing.screenHorizontal,
+    marginBottom: t.spacing.smd,
   },
-  textContainer: {
+  textColumn: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
-    ...theme.typography.h3,
-    color: theme.colors.textDark,
+    ...t.typography.h3,
+    color: t.colors.text,
   },
   subtitle: {
-    ...theme.typography.small,
-    color: theme.colors.textLight,
-    marginTop: 2,
+    ...t.typography.caption,
+    color: t.colors.textSecondary,
+    marginTop: 1,
   },
-  actionButton: {
+  action: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
     gap: 4,
+    // Never squeezed by a long title, and never wider than a third
+    flexShrink: 0,
+    maxWidth: '38%',
+    minHeight: 32,
   },
   actionText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.accent,
+    ...t.typography.captionBold,
+    color: t.colors.accent,
   },
-  actionArrow: {
-    fontSize: 14,
-    color: theme.colors.accent,
+  actionPressed: {
+    opacity: 0.6,
   },
-});
+}));
 
 export default SectionHeader;

@@ -1,63 +1,89 @@
 /**
  * ============================================
- * LOCALIZED MOCK DATA HELPERS
+ * LOCALISED DATA HELPERS
  * ============================================
  *
- * The mock data in `mockData.ts` stores English display names because it
- * stands in for an API response. These helpers map a record id onto the
- * matching translation key so lists render in the active language.
+ * `mockData.ts` stands in for an API, so it stores ids rather than
+ * display strings. These helpers map an id onto its translation key, and
+ * are the only place that mapping is written down.
  *
- * When the real API arrives it should return localized labels directly
- * and these helpers can be removed.
+ * Usage:
+ *   <Text>{t(cityNameKey(property.cityId))}</Text>
+ *
+ * When the real API arrives it should return localised labels and these
+ * can be deleted.
  */
 
-import { Property } from './mockData';
+import { CityId, CountryCode, PropertyType, RiskLevel } from './mockData';
 import { TranslationKey } from './translations';
 
-/** country.id -> translation key */
 const COUNTRY_KEYS: Record<string, TranslationKey> = {
   all: 'countryAll',
-  tr: 'countryTr',
   sa: 'countrySa',
+  tr: 'countryTr',
   ae: 'countryAe',
-  us: 'countryUs',
 };
 
-/** category.id -> translation key */
-const CATEGORY_KEYS: Record<string, TranslationKey> = {
-  villas: 'villas',
-  apartments: 'apartments',
-  lands: 'lands',
-  commercial: 'commercial',
+const CITY_KEYS: Record<CityId, TranslationKey> = {
+  madinah: 'cityMadinah',
+  riyadh: 'cityRiyadh',
+  jeddah: 'cityJeddah',
+  istanbul: 'cityIstanbul',
+  antalya: 'cityAntalya',
+  dubai: 'cityDubai',
 };
 
-/**
- * Translation key for a country chip.
- * Falls back to "All" for unknown ids so the UI never renders a raw key.
- */
-export function countryNameKey(countryId: string): TranslationKey {
-  return COUNTRY_KEYS[countryId] ?? 'countryAll';
-}
-
-/**
- * Translation key for a property category.
- */
-export function categoryNameKey(categoryId: string): TranslationKey {
-  return CATEGORY_KEYS[categoryId] ?? 'categories';
-}
-
-/** property.type -> singular translation key, used on the type badge */
-const PROPERTY_TYPE_KEYS: Record<Property['type'], TranslationKey> = {
+/** Singular type label used on the detail badge */
+const TYPE_KEYS: Record<PropertyType, TranslationKey> = {
   villa: 'typeVilla',
   apartment: 'typeApartment',
   land: 'typeLand',
   commercial: 'typeCommercial',
 };
 
+/** Plural type label used on category tiles and filters */
+const TYPE_PLURAL_KEYS: Record<PropertyType, TranslationKey> = {
+  villa: 'villas',
+  apartment: 'apartments',
+  land: 'lands',
+  commercial: 'commercial',
+};
+
+const RISK_KEYS: Record<RiskLevel, TranslationKey> = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+};
+
+/** Falls back to "All" so an unknown id never renders a raw key */
+export function countryNameKey(countryId: string): TranslationKey {
+  return COUNTRY_KEYS[countryId] ?? 'countryAll';
+}
+
+export function cityNameKey(cityId: CityId): TranslationKey {
+  return CITY_KEYS[cityId];
+}
+
+export function propertyTypeKey(type: PropertyType): TranslationKey {
+  return TYPE_KEYS[type];
+}
+
+export function propertyTypePluralKey(type: PropertyType): TranslationKey {
+  return TYPE_PLURAL_KEYS[type];
+}
+
+export function riskLevelKey(level: RiskLevel): TranslationKey {
+  return RISK_KEYS[level];
+}
+
 /**
- * Translation key for a property type badge.
- * Replaces getPropertyTypeLabel(), which returned English only.
+ * "Медина, Саудовская Аравия" — built from two translated parts rather
+ * than a stored string, so it stays correct in every language.
  */
-export function propertyTypeKey(type: Property['type']): TranslationKey {
-  return PROPERTY_TYPE_KEYS[type];
+export function locationLabel(
+  t: (key: TranslationKey) => string,
+  cityId: CityId,
+  countryCode: CountryCode
+): string {
+  return `${t(cityNameKey(cityId))}, ${t(countryNameKey(countryCode))}`;
 }

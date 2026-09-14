@@ -107,17 +107,27 @@ export const icons = {
   video: 'videocam-outline',
   videoFilled: 'videocam',
   play: 'play',
+  pause: 'pause',
+  rewind: 'play-back-outline',
+  fastForward: 'play-forward-outline',
+  replay: 'refresh-outline',
   playCircle: 'play-circle-outline',
   image: 'image-outline',
+  images: 'images-outline',
   camera: 'camera-outline',
+  volumeOn: 'volume-high',
+  volumeOff: 'volume-mute',
+  expand: 'expand-outline',
 
   // ----------------------------------------
   // COMMUNICATION
   // ----------------------------------------
   message: 'chatbubble-outline',
   messageFilled: 'chatbubble',
+  create: 'create-outline',
   call: 'call-outline',
   email: 'mail-outline',
+  whatsapp: 'logo-whatsapp',
 
   // ----------------------------------------
   // MISC
@@ -132,6 +142,10 @@ export const icons = {
   wallet: 'wallet-outline',
   globe: 'globe-outline',
   language: 'language-outline',
+  moon: 'moon-outline',
+  sun: 'sunny-outline',
+  check: 'checkmark',
+  trash: 'trash-outline',
 } as const;
 
 export type IconName = keyof typeof icons;

@@ -1,147 +1,203 @@
 /**
  * ============================================
- * INVESTOR LOGIN SCREEN
+ * INVESTOR LOGIN
  * ============================================
  *
- * Login screen for investors.
- * Supports email/password and social login.
+ * Email + password form with social sign-in shortcuts.
  *
- * TODO: Connect Firebase Authentication
- * TODO: Add form validation
- * TODO: Add password reset flow
+ * DEMO ONLY — there is no authentication backend. Any submission goes
+ * straight to the investor home, which is what the walkthrough needs.
+ *
+ * KEYBOARD HANDLING
+ * The form lives inside a KeyboardAvoidingView + ScrollView with
+ * `keyboardShouldPersistTaps="handled"`. Without both, the password
+ * field disappears behind the keyboard on a small iPhone and the first
+ * tap on the submit button only dismisses the keyboard instead of
+ * pressing it.
+ *
+ * TODO: Connect real authentication and validation
  */
 
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
-import { LogoMark } from '@/components/ui/LogoMark';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { AppIcon, Button, IconButton, LogoMark } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function InvestorLoginScreen() {
+  const styles = useStyles();
+  const { colors, isDark } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
+  // Brief spinner so the demo reads like a real sign-in
   const handleLogin = () => {
-    // TODO: Connect Firebase Authentication
-    router.replace('/(main)/home');
+    setSubmitting(true);
+    setTimeout(() => {
+      setSubmitting(false);
+      router.replace('/(main)/home');
+    }, 450);
   };
 
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[theme.colors.primary, '#1E293B', theme.colors.background]}
-        locations={[0, 0.4, 1]}
-        style={styles.gradient}
+        colors={
+          isDark
+            ? [colors.backgroundDark, colors.background, colors.background]
+            : ['#0F172A', '#1E293B', colors.background]
+        }
+        locations={[0, 0.35, 1]}
+        style={styles.fill}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+          style={styles.fill}
         >
           <ScrollView
             contentContainerStyle={[
               styles.content,
-              { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 },
+              { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 },
             ]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
           >
-            <Animated.View entering={FadeIn.delay(100)}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <BlurView intensity={30} tint="dark" style={styles.backBlur}>
-                  <AppIcon name="back" size="lg" color={theme.colors.white} />
-                </BlurView>
-              </TouchableOpacity>
+            <Animated.View entering={FadeIn.delay(80)} style={styles.backRow}>
+              <IconButton
+                icon="back"
+                onPress={() => router.back()}
+                accessibilityLabel={t('back')}
+                variant="glass"
+                size={44}
+              />
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.header}>
+            <Animated.View entering={FadeInDown.delay(160).duration(500)} style={styles.header}>
               <LogoMark size="medium" />
-              <Text style={styles.title}>{t('welcomeBack')}</Text>
-              <Text style={styles.subtitle}>{t('signInSubtitle')}</Text>
+              <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+                {t('welcomeBack')}
+              </Text>
+              <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
+                {t('signInSubtitle')}
+              </Text>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.form}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t('email')}</Text>
-                <View style={[styles.inputContainer, focusedField === 'email' && styles.inputFocused]}>
+            <Animated.View entering={FadeInUp.delay(280).duration(500)} style={styles.form}>
+              {/* Email */}
+              <View style={styles.field}>
+                <Text style={styles.label} numberOfLines={1}>
+                  {t('email')}
+                </Text>
+                <View style={[styles.inputShell, focused === 'email' && styles.inputFocused]}>
+                  <AppIcon name="email" size="sm" color={colors.textMuted} />
                   <TextInput
                     style={styles.input}
                     placeholder="investor@example.com"
-                    placeholderTextColor="rgba(107, 114, 128, 0.6)"
+                    placeholderTextColor={colors.textMuted}
                     value={email}
                     onChangeText={setEmail}
-                    onFocus={() => setFocusedField('email')}
-                    onBlur={() => setFocusedField(null)}
+                    onFocus={() => setFocused('email')}
+                    onBlur={() => setFocused(null)}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
                 </View>
               </View>
 
-              <View style={styles.inputGroup}>
+              {/* Password */}
+              <View style={styles.field}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>{t('password')}</Text>
-                  <TouchableOpacity>
-                    <Text style={styles.forgotPassword}>{t('forgotPassword')}</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.label} numberOfLines={1}>
+                    {t('password')}
+                  </Text>
+                  <Pressable
+                    onPress={handleLogin}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    style={({ pressed }) => (pressed ? styles.pressed : undefined)}
+                  >
+                    <Text style={styles.forgot} numberOfLines={1} ellipsizeMode="tail">
+                      {t('forgotPassword')}
+                    </Text>
+                  </Pressable>
                 </View>
-                <View style={[styles.inputContainer, focusedField === 'password' && styles.inputFocused]}>
+                <View style={[styles.inputShell, focused === 'password' && styles.inputFocused]}>
+                  <AppIcon name="security" size="sm" color={colors.textMuted} />
                   <TextInput
                     style={styles.input}
-                    placeholder="••••••••••"
-                    placeholderTextColor="rgba(107, 114, 128, 0.6)"
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
                     value={password}
                     onChangeText={setPassword}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
+                    onFocus={() => setFocused('password')}
+                    onBlur={() => setFocused(null)}
                     secureTextEntry
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
                   />
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={styles.primaryButton}
+              <Button
+                title={t('login')}
                 onPress={handleLogin}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.primaryButtonText}>{t('login')}</Text>
-              </TouchableOpacity>
+                variant="gold"
+                size="lg"
+                loading={submitting}
+                style={styles.submit}
+              />
 
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>{t('orContinueWith')}</Text>
+                <Text style={styles.dividerText} numberOfLines={1} ellipsizeMode="tail">
+                  {t('orContinueWith')}
+                </Text>
                 <View style={styles.dividerLine} />
               </View>
 
-              <View style={styles.socialButtons}>
-                <TouchableOpacity style={styles.socialButton} onPress={handleLogin} activeOpacity={0.8}>
-                  <Text style={styles.socialIcon}>G</Text>
-                  <Text style={styles.socialButtonText}>Google</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.socialButton} onPress={handleLogin} activeOpacity={0.8}>
-                  <Text style={styles.socialIcon}></Text>
-                  <Text style={styles.socialButtonText}>Apple</Text>
-                </TouchableOpacity>
+              <View style={styles.social}>
+                <Button
+                  title="Google"
+                  onPress={handleLogin}
+                  variant="secondary"
+                  size="md"
+                  icon="globe"
+                  style={styles.socialButton}
+                />
+                <Button
+                  title="Apple"
+                  onPress={handleLogin}
+                  variant="secondary"
+                  size="md"
+                  icon="star"
+                  style={styles.socialButton}
+                />
               </View>
+
+              <Text style={styles.demoNote} numberOfLines={2}>
+                {t('demoAction')} · {t('demoActionBody')}
+              </Text>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -150,140 +206,120 @@ export default function InvestorLoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.background,
   },
-  gradient: {
+  fill: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
+  pressed: {
+    opacity: 0.7,
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.xl,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.xl,
-  },
-  backBlur: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+  backRow: {
+    alignItems: 'flex-start',
+    marginBottom: t.spacing.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: t.spacing.section,
   },
   title: {
-    ...theme.typography.h1,
-    color: theme.colors.white,
-    marginTop: theme.spacing.xl,
+    ...t.typography.h1,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: t.spacing.md,
   },
   subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textOnDarkMuted,
-    marginTop: theme.spacing.sm,
+    ...t.typography.small,
+    color: 'rgba(255, 255, 255, 0.72)',
     textAlign: 'center',
+    marginTop: t.spacing.xs,
   },
+
   form: {
-    gap: theme.spacing.lg,
+    gap: t.spacing.md,
   },
-  inputGroup: {
-    gap: 10,
+  field: {
+    gap: t.spacing.sm,
   },
   labelRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: t.spacing.sm,
   },
   label: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.textDark,
+    flexShrink: 1,
+    ...t.typography.smallBold,
+    color: t.colors.text,
   },
-  forgotPassword: {
-    ...theme.typography.small,
-    color: theme.colors.accent,
-    fontWeight: '500',
+  forgot: {
+    flexShrink: 1,
+    maxWidth: 180,
+    ...t.typography.caption,
+    color: t.colors.accent,
+    textAlign: 'right',
   },
-  inputContainer: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...theme.shadows.card,
+  inputShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    height: 54,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.borderRadius.lg,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1.5,
+    borderColor: t.colors.border,
   },
   inputFocused: {
-    borderColor: theme.colors.accent,
+    borderColor: t.colors.accent,
   },
   input: {
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    ...theme.typography.body,
-    color: theme.colors.textDark,
+    flex: 1,
+    minWidth: 0,
+    ...t.typography.body,
+    color: t.colors.text,
+    padding: 0,
   },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 18,
-    borderRadius: theme.borderRadius.lg,
-    alignItems: 'center',
-    marginTop: theme.spacing.smd,
-    ...theme.shadows.primary,
+  submit: {
+    marginTop: t.spacing.xs,
   },
-  primaryButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.white,
-  },
+
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: theme.spacing.sm,
+    gap: t.spacing.smd,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: t.colors.border,
   },
   dividerText: {
-    marginHorizontal: theme.spacing.md,
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
+    flexShrink: 1,
+    maxWidth: '60%',
+    ...t.typography.caption,
+    color: t.colors.textMuted,
+    textAlign: 'center',
   },
-  socialButtons: {
+  social: {
     flexDirection: 'row',
-    gap: theme.spacing.smd,
+    gap: t.spacing.smd,
   },
   socialButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.white,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 10,
+    minWidth: 0,
   },
-  socialIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.textDark,
+  demoNote: {
+    ...t.typography.tiny,
+    color: t.colors.textMuted,
+    textAlign: 'center',
+    marginTop: t.spacing.sm,
   },
-  socialButtonText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.textDark,
-  },
-});
+}));

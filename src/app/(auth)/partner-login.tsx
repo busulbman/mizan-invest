@@ -1,26 +1,30 @@
 /**
  * ============================================
- * PARTNER LOGIN SCREEN
+ * PARTNER LOGIN
  * ============================================
  *
- * Login screen for verified partners.
- * Exclusive glass design with gold accents.
+ * The partner-facing counterpart to the investor sign-in. Same form
+ * mechanics, deliberately different chrome: a dark navy field with a
+ * glass form card and gold accents, so it reads as the professional
+ * portal rather than the consumer app.
  *
- * TODO: Connect Firebase Authentication
- * TODO: Add partner verification flow
- * TODO: Add multi-factor authentication
+ * DEMO ONLY — submitting goes straight to the partner dashboard. No
+ * authentication, no verification flow, no MFA.
+ *
+ * Keyboard handling matches the investor screen: KeyboardAvoidingView
+ * plus a ScrollView that keeps taps alive while the keyboard is open.
  */
 
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,120 +32,136 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { theme } from '@/theme';
-import { LogoMark } from '@/components/ui/LogoMark';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { AppIcon, Badge, Button, IconButton, LogoMark } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
+import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function PartnerLoginScreen() {
+  const styles = useStyles();
+  const { colors, gradients } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleLogin = () => {
-    // TODO: Connect Firebase Authentication
-    // `replace` so the dashboard is not stacked on top of the login form
-    router.replace('/(partner)/dashboard');
+    setSubmitting(true);
+    setTimeout(() => {
+      setSubmitting(false);
+      // `replace` so the dashboard is not stacked on the login form
+      router.replace('/(partner)/dashboard');
+    }, 450);
   };
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={theme.gradients.partnerGradient}
-        locations={[0, 0.5, 1]}
-        style={styles.gradient}
-      >
+      <LinearGradient colors={gradients.partnerGradient} locations={[0, 0.5, 1]} style={styles.fill}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+          style={styles.fill}
         >
           <ScrollView
             contentContainerStyle={[
               styles.content,
-              { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 },
+              { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 },
             ]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
           >
-            <Animated.View entering={FadeIn.delay(100)}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <BlurView intensity={30} tint="dark" style={styles.backBlur}>
-                  <AppIcon name="back" size="lg" color={theme.colors.white} />
-                </BlurView>
-              </TouchableOpacity>
+            <Animated.View entering={FadeIn.delay(80)} style={styles.backRow}>
+              <IconButton
+                icon="back"
+                onPress={() => router.back()}
+                accessibilityLabel={t('back')}
+                variant="glass"
+                size={44}
+              />
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.header}>
-              <View style={styles.proBadge}>
-                <Text style={styles.proBadgeText}>{t('partnerPortalBadge')}</Text>
-              </View>
-              <LogoMark size="medium" />
-              <Text style={styles.title}>{t('partnerWelcome')}</Text>
-              <Text style={styles.subtitle}>{t('partnerSubtitle')}</Text>
+            <Animated.View entering={FadeInDown.delay(160).duration(500)} style={styles.header}>
+              <Badge label={t('partnerPortalBadge')} tone="accent" icon="building" />
+              <LogoMark size="medium" style={styles.logo} />
+              <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+                {t('partnerWelcome')}
+              </Text>
+              <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
+                {t('partnerSubtitle')}
+              </Text>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.formCard}>
-              <BlurView intensity={20} tint="dark" style={styles.formBlur}>
-                <View style={styles.formInner}>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>{t('partnerEmail')}</Text>
-                    <View style={[styles.inputContainer, focusedField === 'email' && styles.inputFocused]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="partner@company.com"
-                        placeholderTextColor="rgba(255, 255, 255, 0.3)"
-                        value={email}
-                        onChangeText={setEmail}
-                        onFocus={() => setFocusedField('email')}
-                        onBlur={() => setFocusedField(null)}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    </View>
+            <Animated.View entering={FadeInUp.delay(280).duration(500)} style={styles.formCard}>
+              <BlurView intensity={22} tint="dark" style={styles.formInner}>
+                <View style={styles.field}>
+                  <Text style={styles.label} numberOfLines={1}>
+                    {t('partnerEmail')}
+                  </Text>
+                  <View style={[styles.inputShell, focused === 'email' && styles.inputFocused]}>
+                    <AppIcon name="email" size="sm" color={colors.onDarkMuted} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="partner@company.com"
+                      placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                      value={email}
+                      onChangeText={setEmail}
+                      onFocus={() => setFocused('email')}
+                      onBlur={() => setFocused(null)}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="next"
+                    />
                   </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>{t('password')}</Text>
-                    <View style={[styles.inputContainer, focusedField === 'password' && styles.inputFocused]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="••••••••••"
-                        placeholderTextColor="rgba(255, 255, 255, 0.3)"
-                        value={password}
-                        onChangeText={setPassword}
-                        onFocus={() => setFocusedField('password')}
-                        onBlur={() => setFocusedField(null)}
-                        secureTextEntry
-                      />
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={handleLogin}
-                    activeOpacity={0.9}
-                  >
-                    <LinearGradient
-                      colors={theme.gradients.gold}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.primaryButtonGradient}
-                    >
-                      <Text style={styles.primaryButtonText}>{t('partnerLoginButton')}</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
                 </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label} numberOfLines={1}>
+                    {t('password')}
+                  </Text>
+                  <View style={[styles.inputShell, focused === 'password' && styles.inputFocused]}>
+                    <AppIcon name="security" size="sm" color={colors.onDarkMuted} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="••••••••"
+                      placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                      value={password}
+                      onChangeText={setPassword}
+                      onFocus={() => setFocused('password')}
+                      onBlur={() => setFocused(null)}
+                      secureTextEntry
+                      returnKeyType="go"
+                      onSubmitEditing={handleLogin}
+                    />
+                  </View>
+                </View>
+
+                <Button
+                  title={t('partnerLoginButton')}
+                  onPress={handleLogin}
+                  variant="gold"
+                  size="lg"
+                  loading={submitting}
+                />
               </BlurView>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.footer}>
-              <Text style={styles.footerText}>{t('notPartnerYet')}</Text>
-              <TouchableOpacity style={styles.requestButton}>
-                <Text style={styles.requestButtonText}>{t('requestPartnerAccess')}</Text>
-                <AppIcon name="arrowForward" size="md" color={theme.colors.accent} />
-              </TouchableOpacity>
+            <Animated.View entering={FadeInUp.delay(420).duration(500)} style={styles.footer}>
+              <Text style={styles.footerText} numberOfLines={2} ellipsizeMode="tail">
+                {t('notPartnerYet')}
+              </Text>
+              <Pressable
+                onPress={() => Alert.alert(t('requestPartnerAccess'), t('requestSentBody'))}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.requestButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.requestText} numberOfLines={1} ellipsizeMode="tail">
+                  {t('requestPartnerAccess')}
+                </Text>
+                <AppIcon name="arrowForward" size="sm" color={colors.accent} />
+              </Pressable>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -150,134 +170,105 @@ export default function PartnerLoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: t.colors.backgroundDark,
   },
-  gradient: {
+  fill: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
+  pressed: {
+    opacity: 0.7,
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.xl,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.xl,
-  },
-  backBlur: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+  backRow: {
+    alignItems: 'flex-start',
+    marginBottom: t.spacing.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: t.spacing.xl,
   },
-  proBadge: {
-    backgroundColor: theme.colors.accentOverlay.light,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: theme.borderRadius.full,
-    marginBottom: theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: theme.colors.accentOverlay.medium,
-  },
-  proBadgeText: {
-    ...theme.typography.label,
-    color: theme.colors.accent,
-    letterSpacing: 1.5,
+  logo: {
+    marginTop: t.spacing.md,
   },
   title: {
-    ...theme.typography.h1,
-    color: theme.colors.white,
-    marginTop: theme.spacing.lg,
+    ...t.typography.h1,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: t.spacing.md,
   },
   subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.textOnDarkMuted,
-    marginTop: theme.spacing.sm,
+    ...t.typography.small,
+    color: 'rgba(255, 255, 255, 0.72)',
     textAlign: 'center',
+    marginTop: t.spacing.xs,
   },
+
   formCard: {
-    borderRadius: theme.borderRadius.hero,
+    borderRadius: t.borderRadius.hero,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
-  },
-  formBlur: {
-    borderRadius: theme.borderRadius.hero,
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   formInner: {
-    padding: theme.spacing.xl,
-    gap: theme.spacing.lg,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
-  inputGroup: {
-    gap: 10,
+  field: {
+    gap: t.spacing.sm,
   },
   label: {
-    ...theme.typography.small,
-    fontWeight: '600',
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.smallBold,
+    color: 'rgba(255, 255, 255, 0.78)',
   },
-  inputContainer: {
+  inputShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    height: 54,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.borderRadius.lg,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.overlay.light,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   inputFocused: {
-    borderColor: theme.colors.accent,
+    borderColor: t.colors.accent,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   input: {
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    ...theme.typography.body,
-    color: theme.colors.white,
+    flex: 1,
+    minWidth: 0,
+    ...t.typography.body,
+    color: '#FFFFFF',
+    padding: 0,
   },
-  primaryButton: {
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    marginTop: theme.spacing.sm,
-    ...theme.shadows.gold,
-  },
-  primaryButtonGradient: {
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.primary,
-  },
+
   footer: {
     alignItems: 'center',
-    marginTop: 40,
-    gap: theme.spacing.smd,
+    gap: t.spacing.sm,
+    marginTop: t.spacing.section,
   },
   footerText: {
-    ...theme.typography.small,
-    color: theme.colors.textOnDarkMuted,
+    ...t.typography.caption,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
   },
   requestButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
+    minHeight: t.metrics.minTouch,
+    maxWidth: '100%',
   },
-  requestButtonText: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.accent,
+  requestText: {
+    flexShrink: 1,
+    ...t.typography.bodyBold,
+    color: t.colors.accent,
   },
-});
+}));
