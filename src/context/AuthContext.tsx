@@ -97,30 +97,63 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     // Do not trust the session's embedded user object for identity. This
     // verifies the access token with Auth before issuing RLS-protected reads.
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
+    //
+    // Wrapped because this is on the startup path: the root layout renders a
+    // blank placeholder until isLoading clears, so a THROWN network error
+    // (unreachable host, DNS failure, an unconfigured build) would strand the
+    // app on that placeholder rather than showing a signed-out screen.
+    let userData;
+    try {
+      const result = await supabase.auth.getUser();
+      if (result.error || !result.data.user) {
+        clearIdentity();
+        return;
+      }
+      userData = result.data;
+    } catch (error) {
+      console.warn('[auth] Could not verify the session; continuing signed out.', error);
       clearIdentity();
       return;
     }
 
     const authenticatedUser = userData.user;
-    const [profileResult, rolesResult, membershipsResult] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, full_name, avatar_path, preferred_language, preferred_currency')
-        .eq('id', authenticatedUser.id)
-        .maybeSingle(),
-      supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', authenticatedUser.id)
-        .is('revoked_at', null),
-      supabase
-        .from('partner_members')
-        .select('id, partner_id, member_role')
-        .eq('user_id', authenticatedUser.id)
-        .eq('is_active', true),
-    ]);
+    // Promise.all rejects on the first failure, so this is guarded for the same
+    // reason as above — a rejection here would leave isLoading stuck true.
+    let profileResult;
+    let rolesResult;
+    let membershipsResult;
+    try {
+      [profileResult, rolesResult, membershipsResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, avatar_path, preferred_language, preferred_currency')
+          .eq('id', authenticatedUser.id)
+          .maybeSingle(),
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', authenticatedUser.id)
+          .is('revoked_at', null),
+        supabase
+          .from('partner_members')
+          .select('id, partner_id, member_role')
+          .eq('user_id', authenticatedUser.id)
+          .eq('is_active', true),
+      ]);
+    } catch (error) {
+      // Fail closed on authorization: the person stays signed in, but holds no
+      // management role in the UI until a read succeeds.
+      console.warn('[auth] Identity reads failed; continuing with no roles.', error);
+      if (mountedRef.current) {
+        setUser(authenticatedUser);
+        setSession(nextSession);
+        setProfile(null);
+        setRoles([]);
+        setPartnerMemberships([]);
+        setIsLoading(false);
+      }
+      return;
+    }
 
     // An authorization read error is fail-closed: the person remains signed
     // in, but is granted no management role in the app UI.
@@ -158,8 +191,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [clearIdentity]);
 
   const refresh = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    await loadIdentity(data.session);
+    // Never rejects: callers use this for a pull-to-refresh or a soft restart,
+    // and an unhandled rejection there would be a startup-path hazard again.
+    try {
+      const { data } = await supabase.auth.getSession();
+      await loadIdentity(data.session);
+    } catch (error) {
+      console.warn('[auth] Refresh failed; leaving identity unchanged.', error);
+    }
   }, [loadIdentity]);
 
   const handleInboundAuthUrl = useCallback(async (url: string) => {
@@ -187,10 +226,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     mountedRef.current = true;
-    void supabase.auth.getSession().then(({ data }) => loadIdentity(data.session));
+    // Every entry point into loadIdentity gets a catch. An unhandled rejection
+    // on this path would leave isLoading true and the app on a blank screen.
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => loadIdentity(data.session))
+      .catch((error) => {
+        console.warn('[auth] Could not read the stored session; continuing signed out.', error);
+        clearIdentity();
+      });
 
     const { data: subscriptionData } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void loadIdentity(nextSession);
+      void loadIdentity(nextSession).catch(() => clearIdentity());
     });
     const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
       void handleInboundAuthUrl(url);
@@ -204,7 +251,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       subscriptionData.subscription.unsubscribe();
       linkingSubscription.remove();
     };
-  }, [handleInboundAuthUrl, loadIdentity]);
+  }, [clearIdentity, handleInboundAuthUrl, loadIdentity]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });

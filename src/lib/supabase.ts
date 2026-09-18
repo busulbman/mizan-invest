@@ -26,8 +26,26 @@
  * across app restarts. On web there is no SQLite file, so the client
  * falls back to its own localStorage default.
  *
- * NOTE: No database tables exist yet. This file only establishes the
- * connection — queries come later.
+ * STARTUP SAFETY — DO NOT MAKE THIS MODULE THROW
+ * This file is imported by AuthContext, which is imported by the root
+ * layout, so it is evaluated while the JS bundle is still being loaded —
+ * before React renders anything and before any error boundary exists.
+ * A `throw` at this point is not a red box in a release build: React
+ * Native escalates it through RCTFatal / RCTExceptionsManager, which
+ * calls abort() and the app dies with SIGABRT about a third of a second
+ * after launch.
+ *
+ * That is exactly what happened in TestFlight build 5. `.env` is
+ * gitignored, so it is not in the archive EAS builds from; both
+ * EXPO_PUBLIC_ variables were therefore undefined in the production
+ * bundle and this module threw on import. It could never reproduce in
+ * development, where the dev server loads `.env` and a throw only shows
+ * a red box.
+ *
+ * Missing configuration is now reported, not fatal. The client is still
+ * constructed — against an unroutable host — so every call fails as an
+ * ordinary network error that callers already handle, and the app still
+ * reaches a usable screen.
  */
 
 import 'react-native-url-polyfill/auto';
@@ -46,29 +64,56 @@ const isWeb = Platform.OS === 'web';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-if (!supabaseUrl || !supabasePublishableKey) {
-  // Fail loudly at startup rather than with a confusing network error
-  // on the first query.
-  throw new Error(
-    'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and ' +
-      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to your .env file and restart ' +
-      'the dev server (env values are inlined at build time).'
+/**
+ * Whether real credentials were compiled into this bundle.
+ *
+ * Callers can use this to skip work that is certain to fail, and the
+ * value is a build-time fact: `EXPO_PUBLIC_*` is inlined by Metro, so it
+ * cannot change at runtime.
+ */
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
+
+if (!isSupabaseConfigured) {
+  // Loud, but not fatal. See the STARTUP SAFETY note above: throwing here
+  // aborts the process in a release build.
+  console.error(
+    '[supabase] Not configured: EXPO_PUBLIC_SUPABASE_URL and/or ' +
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY are missing from this build. ' +
+      'Locally, add them to .env. For EAS builds, set them as EAS ' +
+      'environment variables — a gitignored .env is NOT uploaded to EAS. ' +
+      'The app will run, but every Supabase request will fail.'
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
-  auth: {
-    // Web has its own localStorage default; SQLite is native-only.
-    storage: isWeb ? undefined : Storage,
-    persistSession: true,
-    autoRefreshToken: true,
+/**
+ * Placeholders used only when configuration is missing.
+ *
+ * `.invalid` is reserved by RFC 2606 and can never resolve, so a
+ * misconfigured build fails fast and offline instead of quietly talking
+ * to some other host. The string is still a syntactically valid URL,
+ * which matters: `createClient` validates its argument and would throw
+ * on a malformed one — reintroducing the very crash this avoids.
+ */
+const UNCONFIGURED_URL = 'https://unconfigured.invalid';
+const UNCONFIGURED_KEY = 'unconfigured';
 
-    // Session-in-URL detection is a browser OAuth-redirect concern. On
-    // a native app there is no URL to parse, and leaving it on makes
-    // the client misread deep links.
-    detectSessionInUrl: isWeb,
-  },
-});
+export const supabase = createClient(
+  supabaseUrl ?? UNCONFIGURED_URL,
+  supabasePublishableKey ?? UNCONFIGURED_KEY,
+  {
+    auth: {
+      // Web has its own localStorage default; SQLite is native-only.
+      storage: isWeb ? undefined : Storage,
+      persistSession: true,
+      autoRefreshToken: true,
+
+      // Session-in-URL detection is a browser OAuth-redirect concern. On
+      // a native app there is no URL to parse, and leaving it on makes
+      // the client misread deep links.
+      detectSessionInUrl: isWeb,
+    },
+  }
+);
 
 /**
  * Refresh tokens only while the app is in the foreground.

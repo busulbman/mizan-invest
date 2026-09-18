@@ -41,9 +41,18 @@ function RootNavigator() {
   const { isMarketReady } = useMarket();
   const { isLoading: isAuthLoading } = useAuth();
   const { isDark, colors } = useTheme();
-  const [fontsLoaded] = useFonts(fontAssets);
+  // The error is read, not discarded. Font files resolve differently in a
+  // standalone build than under the dev server, and if one fails to load
+  // `fontsLoaded` never turns true — which would hold the app on the blank
+  // placeholder forever. Proceeding with system fonts is far better than a
+  // permanently empty screen.
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
 
-  if (!isReady || !isMarketReady || isAuthLoading || !fontsLoaded) {
+  if (fontError) {
+    console.warn('[fonts] Custom fonts failed to load; falling back to system fonts.', fontError);
+  }
+
+  if (!isReady || !isMarketReady || isAuthLoading || (!fontsLoaded && !fontError)) {
     // Same colour as the splash so the handover shows no white flash
     return <View style={styles.placeholder} />;
   }
