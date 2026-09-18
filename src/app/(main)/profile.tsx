@@ -14,7 +14,8 @@
  * TODO: Show the signed-in investor once authentication exists
  */
 
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -24,9 +25,12 @@ import { IconName } from '@/constants/icons';
 import { TranslationKey } from '@/constants/translations';
 import { AppIcon, Button, IconButton } from '@/components/ui';
 import { useFavorites } from '@/context/FavoritesContext';
+import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { goToParent } from '@/lib/navigation';
+import { getAvatarUrl } from '@/lib/profile';
 
 interface LinkRow {
   icon: IconName;
@@ -48,15 +52,31 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { count: favoriteCount } = useFavorites();
   const { unreadCount } = useNotifications();
-
-  const goBack = () => {
-    router.replace('/(main)/home');
-  };
+  const { isAuthenticated, isPartner, profile, signOut, user } = useAuth();
 
   // Legal and support pages are outside the demo's scope; say so
   // explicitly rather than leaving a row that does nothing.
   const openInfoRow = (labelKey: TranslationKey) => {
     Alert.alert(t(labelKey), t('featureComingSoon'));
+  };
+
+  // Signed avatar URL. The avatars bucket is private, so the profile row
+  // stores a path and the URL is minted per session.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getAvatarUrl(profile?.avatarPath ?? null).then((url) => {
+      if (active) setAvatarUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, [profile?.avatarPath]);
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) Alert.alert(t('error'), t('authRequestFailed'));
   };
 
   return (
@@ -69,7 +89,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeIn} style={styles.header}>
-          <IconButton icon="back" onPress={goBack} accessibilityLabel={t('back')} variant="surface" size={44} />
+          <IconButton icon="back" onPress={() => goToParent('/(main)/home')} accessibilityLabel={t('back')} variant="surface" size={44} />
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
             {t('profileTitle')}
           </Text>
@@ -84,19 +104,23 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ---------------------------------------- */}
-        {/* GUEST CARD */}
+        {/* Identity card — signed-in state uses only public profile/Auth data. */}
         {/* ---------------------------------------- */}
         <Animated.View entering={FadeInDown.delay(60)} style={styles.card}>
           <View style={styles.userRow}>
             <View style={styles.avatar}>
-              <AppIcon name="profile" size="lg" color={colors.accent} />
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+              ) : (
+                <AppIcon name="profile" size="lg" color={colors.accent} />
+              )}
             </View>
             <View style={styles.userText}>
               <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
-                {t('guestUser')}
+                {isAuthenticated ? profile?.fullName || user?.email || t('profileTitle') : t('guestUser')}
               </Text>
               <Text style={styles.userSub} numberOfLines={2} ellipsizeMode="tail">
-                {t('guestUserSubtitle')}
+                {isAuthenticated ? user?.email : t('guestUserSubtitle')}
               </Text>
             </View>
           </View>
@@ -121,18 +145,24 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Text style={styles.prompt} numberOfLines={3}>
-            {t('signInPrompt')}
-          </Text>
-
-          <Button
-            title={t('login')}
-            onPress={() => router.push('/(auth)/investor-login')}
-            variant="primary"
-            size="md"
-            iconRight="arrowForward"
-            style={styles.signInButton}
-          />
+          {isAuthenticated ? (
+            <>
+              <Button
+                title={t('editProfile')}
+                onPress={() => router.push('/(main)/edit-profile')}
+                variant="secondary"
+                size="md"
+                icon="profile"
+                style={styles.signInButton}
+              />
+              <Button title={t('logout')} onPress={handleSignOut} variant="outline" size="md" style={styles.signInButton} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.prompt} numberOfLines={3}>{t('signInPrompt')}</Text>
+              <Button title={t('login')} onPress={() => router.push('/(auth)/investor-login')} variant="primary" size="md" iconRight="arrowForward" style={styles.signInButton} />
+            </>
+          )}
         </Animated.View>
 
         {/* ---------------------------------------- */}
@@ -187,29 +217,23 @@ export default function ProfileScreen() {
         {/* ---------------------------------------- */}
         {/* PARTNER PORTAL */}
         {/* ---------------------------------------- */}
-        <Animated.View entering={FadeInDown.delay(180)} style={styles.section}>
-          <Text style={styles.sectionLabel} numberOfLines={1}>
-            {t('forPartners')}
-          </Text>
-          <Pressable
-            onPress={() => router.push('/(auth)/partner-login')}
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.partnerCard, pressed && styles.pressed]}
-          >
-            <View style={styles.partnerIcon}>
-              <AppIcon name="building" size="md" color={colors.accent} />
-            </View>
-            <View style={styles.linkText}>
-              <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">
-                {t('partnerPortalAccess')}
-              </Text>
-              <Text style={styles.partnerSub} numberOfLines={2} ellipsizeMode="tail">
-                {t('partnerPortalDescription')}
-              </Text>
-            </View>
-            <AppIcon name="arrowForward" size="sm" color={colors.onDarkMuted} />
-          </Pressable>
-        </Animated.View>
+        {isPartner && (
+          <Animated.View entering={FadeInDown.delay(180)} style={styles.section}>
+            <Text style={styles.sectionLabel} numberOfLines={1}>{t('forPartners')}</Text>
+            <Pressable
+              onPress={() => router.push('/(partner)/dashboard')}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.partnerCard, pressed && styles.pressed]}
+            >
+              <View style={styles.partnerIcon}><AppIcon name="building" size="md" color={colors.accent} /></View>
+              <View style={styles.linkText}>
+                <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">{t('partnerPortalAccess')}</Text>
+                <Text style={styles.partnerSub} numberOfLines={2} ellipsizeMode="tail">{t('partnerPortalDescription')}</Text>
+              </View>
+              <AppIcon name="arrowForward" size="sm" color={colors.onDarkMuted} />
+            </Pressable>
+          </Animated.View>
+        )}
 
         {/* ---------------------------------------- */}
         {/* ABOUT */}
@@ -311,7 +335,9 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center',
     backgroundColor: t.colors.accentOverlay.light,
     flexShrink: 0,
+    overflow: 'hidden',
   },
+  avatarImage: { width: '100%', height: '100%' },
   userText: {
     flex: 1,
     minWidth: 0,

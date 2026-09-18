@@ -33,7 +33,7 @@ interface TranslationRow {
 interface PropertyMediaRow {
   storage_bucket: string;
   storage_path: string;
-  media_type: 'image' | 'video' | 'floor_plan' | 'document';
+  media_type: 'image' | 'video' | 'reel_video' | 'floor_plan' | 'document';
   sort_order: number;
   is_cover: boolean;
 }
@@ -55,6 +55,7 @@ interface PropertyDatabaseRow {
   has_security: boolean;
   has_garden: boolean;
   has_sea_view: boolean;
+  has_city_view: boolean;
   year_built: number | null;
   featured: boolean;
   verified: boolean;
@@ -118,6 +119,11 @@ export interface PropertyMedia {
   isCover: boolean;
 }
 
+/** Extra remote-only amenity supported by the production schema. */
+export interface RemotePropertyFeatures extends PropertyFeatures {
+  cityView: boolean;
+}
+
 /** Database-backed investment metrics preserve missing values as null. */
 export interface RemoteInvestmentAnalysis {
   estimatedRoi: number | null;
@@ -148,6 +154,7 @@ export interface RemoteProperty
     | 'rentalYield'
     | 'investmentScore'
     | 'aiAnalysis'
+    | 'features'
   > {
   referenceCode: string;
   publicationStatus: PublicationStatus;
@@ -174,6 +181,7 @@ export interface RemoteProperty
   roi: number | null;
   rentalYield: number | null;
   investmentScore: number | null;
+  features: RemotePropertyFeatures;
   aiAnalysis: RemoteInvestmentAnalysis;
 }
 
@@ -194,6 +202,7 @@ const PROPERTY_SELECT = `
   has_security,
   has_garden,
   has_sea_view,
+  has_city_view,
   year_built,
   featured,
   verified,
@@ -264,36 +273,43 @@ const publicPropertyMediaBuckets = new Set(
     .filter(Boolean),
 );
 
-function mediaUrl(storageBucket: string, storagePath: string): string | null {
+async function mediaUrl(storageBucket: string, storagePath: string): Promise<string | null> {
   if (!storageBucket || !storagePath) return null;
 
   // A storage path is not proof that a bucket is public. Only construct a
   // public URL after that bucket has been explicitly configured as public.
-  if (!publicPropertyMediaBuckets.has(storageBucket)) return null;
+  if (publicPropertyMediaBuckets.has(storageBucket)) {
+    // getPublicUrl only constructs a URL locally; it performs no write.
+    const { data } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
+    return data.publicUrl || null;
+  }
 
-  // getPublicUrl only constructs a URL locally; it performs no write.
-  const { data } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
-  return data.publicUrl || null;
+  // Private buckets must not be guessed as public URLs. Storage RLS authorizes
+  // this signed URL request against the matching published property_media row.
+  const { data, error } = await supabase.storage.from(storageBucket).createSignedUrl(storagePath, 60 * 60);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }
 
-function mapMedia(mediaRows: PropertyMediaRow[]): PropertyMedia[] {
-  return [...mediaRows]
+async function mapMedia(mediaRows: PropertyMediaRow[]): Promise<PropertyMedia[]> {
+  const sortedMedia = [...mediaRows]
     .sort((left, right) => Number(right.is_cover) - Number(left.is_cover) || left.sort_order - right.sort_order)
-    .flatMap((media) => {
-      const url = mediaUrl(media.storage_bucket, media.storage_path);
-      return url ? [{ type: media.media_type, url, isCover: media.is_cover }] : [];
-    });
+  const resolved = await Promise.all(sortedMedia.map(async (media) => {
+    const url = await mediaUrl(media.storage_bucket, media.storage_path);
+    return url ? { type: media.media_type, url, isCover: media.is_cover } : null;
+  }));
+  return resolved.filter((media): media is PropertyMedia => media !== null);
 }
 
-function mapProperty(row: PropertyDatabaseRow, language: Language): RemoteProperty {
+async function mapProperty(row: PropertyDatabaseRow, language: Language): Promise<RemoteProperty> {
   const translation = selectTranslation(row.property_translations ?? [], language);
   const cityTranslation = selectTranslation(row.cities.city_translations ?? [], language);
   const countryTranslation = selectTranslation(row.countries.country_translations ?? [], language);
-  const media = mapMedia(row.property_media ?? []);
+  const media = await mapMedia(row.property_media ?? []);
   const imageUrls = media.filter((item) => item.type === 'image').map((item) => item.url);
   const images = imageUrls.length > 0 ? imageUrls : [Images.placeholders.property];
 
-  const features: PropertyFeatures = {
+  const features: RemotePropertyFeatures = {
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     area: row.area_sqm ?? 0,
@@ -302,6 +318,7 @@ function mapProperty(row: PropertyDatabaseRow, language: Language): RemoteProper
     security: row.has_security,
     garden: row.has_garden,
     seaView: row.has_sea_view,
+    cityView: row.has_city_view,
     ...(row.year_built === null ? {} : { yearBuilt: row.year_built }),
   };
 
@@ -373,7 +390,7 @@ export async function getPublishedProperties(language: Language): Promise<Remote
     .returns<PropertyDatabaseRow[]>();
 
   throwIfQueryFailed(error);
-  return (data ?? []).map((row) => mapProperty(row, language));
+  return Promise.all((data ?? []).map((row) => mapProperty(row, language)));
 }
 
 /** Returns one publicly readable, published property, or null when it is absent. */
@@ -395,7 +412,7 @@ export async function getFeaturedProperties(language: Language): Promise<RemoteP
     .returns<PropertyDatabaseRow[]>();
 
   throwIfQueryFailed(error);
-  return (data ?? []).map((row) => mapProperty(row, language));
+  return Promise.all((data ?? []).map((row) => mapProperty(row, language)));
 }
 
 /** Returns published properties for an ISO-2 country code, such as `sa`. */
@@ -409,7 +426,7 @@ export async function getPropertiesByCountry(
     .returns<PropertyDatabaseRow[]>();
 
   throwIfQueryFailed(error);
-  return (data ?? []).map((row) => mapProperty(row, language));
+  return Promise.all((data ?? []).map((row) => mapProperty(row, language)));
 }
 
 /** Compact display format that always retains the listing's own currency code. */
@@ -432,17 +449,35 @@ export type RemotePropertySort =
   | 'price_high_to_low'
   | 'roi_high_to_low';
 
+export type RemotePropertyAmenity = 'pool' | 'security' | 'garden' | 'seaView' | 'cityView';
+
 export interface RemotePropertyFilters {
   countryCode?: string | null;
+  /** Stable UUID avoids collisions when future markets reuse a city slug. */
+  cityId?: string | null;
   citySlug?: string | null;
   propertyType?: PropertyType | null;
+  listingStatus?: RemoteProperty['status'] | null;
+  /** A studio is an apartment whose database bedroom count is zero. */
+  studioOnly?: boolean;
+  /** Listing-currency bounds, used when the active market has one currency. */
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  priceCurrency?: ListingCurrencyCode | null;
+  /** Legacy cross-market USD bounds retained for existing callers. */
   minPriceUsd?: number | null;
   maxPriceUsd?: number | null;
   minBedrooms?: number | null;
   minBathrooms?: number | null;
+  minAreaSqm?: number | null;
+  maxAreaSqm?: number | null;
+  amenities?: RemotePropertyAmenity[];
   verifiedOnly?: boolean;
+  /** Uses the partner's public verified flag, never private contact data. */
+  verifiedPartnerOnly?: boolean;
   featuredOnly?: boolean;
   minInvestmentScore?: number | null;
+  minRoi?: number | null;
   search?: string;
 }
 
@@ -470,12 +505,23 @@ export function filterAndSortRemoteProperties(
 ): RemoteProperty[] {
   const needle = filters.search?.trim().toLocaleLowerCase() ?? '';
   const countryCode = filters.countryCode?.toLowerCase();
+  const cityId = filters.cityId?.toLowerCase();
   const citySlug = filters.citySlug?.toLowerCase();
 
   const filtered = properties.filter((property) => {
     if (countryCode && property.country.code.toLowerCase() !== countryCode) return false;
+    if (cityId && property.city.id.toLowerCase() !== cityId) return false;
     if (citySlug && property.city.slug.toLowerCase() !== citySlug) return false;
     if (filters.propertyType && property.type !== filters.propertyType) return false;
+    if (filters.listingStatus && property.status !== filters.listingStatus) return false;
+    if (filters.studioOnly && (property.type !== 'apartment' || property.features.bedrooms !== 0)) return false;
+    if (filters.priceCurrency && property.priceCurrency !== filters.priceCurrency) return false;
+    if (filters.minPrice !== undefined && filters.minPrice !== null && property.price < filters.minPrice) {
+      return false;
+    }
+    if (filters.maxPrice !== undefined && filters.maxPrice !== null && property.price > filters.maxPrice) {
+      return false;
+    }
     if (filters.minPriceUsd !== undefined && filters.minPriceUsd !== null && property.priceUsd < filters.minPriceUsd) {
       return false;
     }
@@ -484,7 +530,13 @@ export function filterAndSortRemoteProperties(
     }
     if (filters.minBedrooms && property.features.bedrooms < filters.minBedrooms) return false;
     if (filters.minBathrooms && property.features.bathrooms < filters.minBathrooms) return false;
+    if (filters.minAreaSqm !== undefined && filters.minAreaSqm !== null
+      && (property.areaSqm === null || property.areaSqm < filters.minAreaSqm)) return false;
+    if (filters.maxAreaSqm !== undefined && filters.maxAreaSqm !== null
+      && (property.areaSqm === null || property.areaSqm > filters.maxAreaSqm)) return false;
+    if (filters.amenities?.some((amenity) => !property.features[amenity])) return false;
     if (filters.verifiedOnly && !property.verified) return false;
+    if (filters.verifiedPartnerOnly && !property.partner.verified) return false;
     if (filters.featuredOnly && !property.featured) return false;
     if (
       filters.minInvestmentScore
@@ -492,6 +544,7 @@ export function filterAndSortRemoteProperties(
     ) {
       return false;
     }
+    if (filters.minRoi && (property.roi === null || property.roi < filters.minRoi)) return false;
     if (!needle) return true;
 
     return [
@@ -500,6 +553,7 @@ export function filterAndSortRemoteProperties(
       property.country.name,
       property.partner.name,
       property.type,
+      property.referenceCode,
     ]
       .join(' ')
       .toLocaleLowerCase()

@@ -28,6 +28,7 @@ import Animated, {
 
 import { LogoMark } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 const { height } = Dimensions.get('window');
@@ -36,6 +37,7 @@ export default function SplashScreen() {
   const styles = useStyles();
   const { gradients, animation } = useTheme();
   const { t, isRTL } = useLanguage();
+  const { isAuthenticated } = useAuth();
 
   const shimmer = useSharedValue(0);
 
@@ -47,11 +49,11 @@ export default function SplashScreen() {
     );
 
     const timer = setTimeout(() => {
-      router.replace('/(auth)/onboarding');
+      router.replace(isAuthenticated ? '/(main)/home' : '/(auth)/onboarding');
     }, animation.splashDuration);
 
     return () => clearTimeout(timer);
-  }, [animation.splashDuration, shimmer]);
+  }, [animation.splashDuration, isAuthenticated, shimmer]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     opacity: 0.25 + shimmer.value * 0.45,

@@ -20,6 +20,7 @@
 
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -34,27 +35,46 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { AppIcon, Button, IconButton, LogoMark } from '@/components/ui';
+import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { goBackOrHome } from '@/lib/navigation';
 
 export default function InvestorLoginScreen() {
   const styles = useStyles();
   const { colors, isDark } = useTheme();
   const { t } = useLanguage();
+  const { signIn, signUp } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [focused, setFocused] = useState<'name' | 'email' | 'password' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Brief spinner so the demo reads like a real sign-in
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) return;
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      router.replace('/(main)/home');
-    }, 450);
+    const result = isSignUp
+      ? await signUp({ email, password, fullName })
+      : await signIn(email, password);
+    setSubmitting(false);
+
+    if (result.error) {
+      // Supabase returns user-safe Auth errors (for example invalid
+      // credentials). Avoid logging addresses or passwords on the client.
+      Alert.alert(t('error'), result.error.message || t('authRequestFailed'));
+      return;
+    }
+
+    if ('needsEmailConfirmation' in result && result.needsEmailConfirmation) {
+      Alert.alert(t('success'), t('checkYourEmail'));
+      return;
+    }
+
+    router.replace('/(main)/home');
   };
 
   return (
@@ -84,7 +104,7 @@ export default function InvestorLoginScreen() {
             <Animated.View entering={FadeIn.delay(80)} style={styles.backRow}>
               <IconButton
                 icon="back"
-                onPress={() => router.back()}
+                onPress={goBackOrHome}
                 accessibilityLabel={t('back')}
                 variant="glass"
                 size={44}
@@ -97,11 +117,28 @@ export default function InvestorLoginScreen() {
                 {t('welcomeBack')}
               </Text>
               <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
-                {t('signInSubtitle')}
+                {isSignUp ? t('createAccount') : t('signInSubtitle')}
               </Text>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(280).duration(500)} style={styles.form}>
+              {isSignUp && (
+                <View style={styles.field}>
+                  <Text style={styles.label} numberOfLines={1}>{t('name')}</Text>
+                  <View style={[styles.inputShell, focused === 'name' && styles.inputFocused]}>
+                    <AppIcon name="profile" size="sm" color={colors.textMuted} />
+                    <TextInput
+                      style={styles.input}
+                      value={fullName}
+                      onChangeText={setFullName}
+                      onFocus={() => setFocused('name')}
+                      onBlur={() => setFocused(null)}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+                </View>
+              )}
               {/* Email */}
               <View style={styles.field}>
                 <Text style={styles.label} numberOfLines={1}>
@@ -132,7 +169,7 @@ export default function InvestorLoginScreen() {
                     {t('password')}
                   </Text>
                   <Pressable
-                    onPress={handleLogin}
+                    onPress={() => router.push('/(auth)/forgot-password')}
                     hitSlop={8}
                     accessibilityRole="button"
                     style={({ pressed }) => (pressed ? styles.pressed : undefined)}
@@ -160,7 +197,7 @@ export default function InvestorLoginScreen() {
               </View>
 
               <Button
-                title={t('login')}
+                title={isSignUp ? t('signUp') : t('login')}
                 onPress={handleLogin}
                 variant="gold"
                 size="lg"
@@ -168,36 +205,15 @@ export default function InvestorLoginScreen() {
                 style={styles.submit}
               />
 
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText} numberOfLines={1} ellipsizeMode="tail">
-                  {t('orContinueWith')}
+              <Pressable
+                onPress={() => setIsSignUp((value) => !value)}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.authSwitch, pressed && styles.pressed]}
+              >
+                <Text style={styles.authSwitchText} numberOfLines={1}>
+                  {isSignUp ? t('alreadyHaveAccount') : t('createAccount')}
                 </Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.social}>
-                <Button
-                  title="Google"
-                  onPress={handleLogin}
-                  variant="secondary"
-                  size="md"
-                  icon="globe"
-                  style={styles.socialButton}
-                />
-                <Button
-                  title="Apple"
-                  onPress={handleLogin}
-                  variant="secondary"
-                  size="md"
-                  icon="star"
-                  style={styles.socialButton}
-                />
-              </View>
-
-              <Text style={styles.demoNote} numberOfLines={2}>
-                {t('demoAction')} · {t('demoActionBody')}
-              </Text>
+              </Pressable>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -289,6 +305,15 @@ const useStyles = makeStyles((t) => ({
   },
   submit: {
     marginTop: t.spacing.xs,
+  },
+  authSwitch: {
+    alignSelf: 'center',
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
+  },
+  authSwitchText: {
+    ...t.typography.captionBold,
+    color: t.colors.accent,
   },
 
   divider: {

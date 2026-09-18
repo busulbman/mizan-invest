@@ -25,6 +25,8 @@ import { LANGUAGE_ORDER, Language, languageCodes, languageNames } from '@/consta
 import { useCurrency } from '@/context/CurrencyContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { ThemePreference, makeStyles, useTheme } from '@/context/ThemeContext';
+import { MARKET_OPTIONS } from '@/constants/markets';
+import { useMarket } from '@/context/MarketContext';
 
 export type PickerVariant = 'compact' | 'glass' | 'row';
 
@@ -247,6 +249,53 @@ export function AppearancePicker({
             active={option === preference}
             onPress={() => {
               setPreference(option);
+              setOpen(false);
+            }}
+          />
+        ))}
+      </BottomSheet>
+    </>
+  );
+}
+
+// ============================================
+// INVESTMENT MARKET
+// ============================================
+
+export function MarketPicker({
+  variant = 'row',
+  style,
+}: {
+  variant?: PickerVariant;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { t } = useLanguage();
+  const { selectedMarket, setSelectedMarket } = useMarket();
+  const [open, setOpen] = useState(false);
+
+  const selected = MARKET_OPTIONS.find((option) => option.code === selectedMarket) ?? MARKET_OPTIONS[2];
+
+  return (
+    <>
+      <Trigger
+        variant={variant}
+        icon="globe"
+        label={t('investmentMarket')}
+        value={t(selected.countryKey)}
+        onPress={() => setOpen(true)}
+        accessibilityLabel={t('selectInvestmentMarket')}
+        style={style}
+      />
+
+      <BottomSheet visible={open} onClose={() => setOpen(false)} title={t('selectInvestmentMarket')}>
+        {MARKET_OPTIONS.map((option) => (
+          <SheetOption
+            key={option.code ?? 'all'}
+            label={t(option.countryKey)}
+            hint={t(option.detailsKey)}
+            active={selectedMarket === option.code}
+            onPress={() => {
+              setSelectedMarket(option.code);
               setOpen(false);
             }}
           />

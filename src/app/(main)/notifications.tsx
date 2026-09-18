@@ -24,6 +24,7 @@ import { relativeTime } from '@/constants/notificationsData';
 import { AppNotification, useNotifications } from '@/context/NotificationsContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { goToParent } from '@/lib/navigation';
 
 export default function NotificationsScreen() {
   const styles = useStyles();
@@ -61,7 +62,7 @@ export default function NotificationsScreen() {
         <View style={styles.headerRow}>
           <IconButton
             icon="back"
-            onPress={() => router.back()}
+            onPress={() => goToParent('/(main)/home')}
             accessibilityLabel={t('back')}
             variant="surface"
             size={40}

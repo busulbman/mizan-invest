@@ -190,6 +190,101 @@ export function PropertyRow({ property }: { property: Property }) {
 }
 
 // ============================================
+// REMOTE POSTER + COMPACT CARDS — Home rails
+// ============================================
+
+/**
+ * Home uses these remote counterparts rather than the mock card variants so
+ * listing copy, UUID navigation and the stored listing currency stay intact.
+ */
+export function RemotePropertyPosterCard({ property }: { property: RemoteProperty }) {
+  const styles = useStyles();
+  const { gradients, colors } = useTheme();
+  const { language, t } = useLanguage();
+
+  return (
+    <Pressable
+      onPress={() => openProperty(property.id)}
+      accessibilityRole="button"
+      accessibilityLabel={property.title}
+      style={({ pressed }) => [styles.poster, pressed && styles.pressed]}
+    >
+      <RemoteImage uri={property.image} style={styles.posterImage} />
+
+      <LinearGradient colors={gradients.darkOverlay} locations={[0.3, 0.6, 1]} style={styles.posterOverlay}>
+        <View style={styles.posterTop}>
+          {property.verified && <Badge label={t('verified')} tone="onImage" icon="verified" small />}
+          <FavoriteButton propertyId={property.id} size={38} />
+        </View>
+
+        <View style={styles.posterBottom}>
+          <Text style={styles.posterTitle} numberOfLines={2} ellipsizeMode="tail">
+            {property.title}
+          </Text>
+          <View style={styles.locationRow}>
+            <AppIcon name="location" size="xs" color={colors.onDarkMuted} />
+            <Text style={styles.posterLocation} numberOfLines={1} ellipsizeMode="tail">
+              {property.city.name} / {property.country.name}
+            </Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.posterPrice} numberOfLines={1} ellipsizeMode="tail">
+              {formatListingPrice(property.price, property.priceCurrency, language)}
+            </Text>
+            {property.roi !== null && (
+              <View style={styles.roiPill}>
+                <AppIcon name="trendUp" size="xs" color={colors.accent} />
+                <Text style={styles.roiText} numberOfLines={1}>{formatROI(property.roi)}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+export function RemotePropertyCompactCard({ property }: { property: RemoteProperty }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { language } = useLanguage();
+
+  return (
+    <Pressable
+      onPress={() => openProperty(property.id)}
+      accessibilityRole="button"
+      accessibilityLabel={property.title}
+      style={({ pressed }) => [styles.compact, pressed && styles.pressed]}
+    >
+      <View style={styles.compactImageWrap}>
+        <RemoteImage uri={property.image} style={styles.compactImage} />
+        <FavoriteButton propertyId={property.id} size={34} style={styles.compactFavorite} />
+      </View>
+
+      <View style={styles.compactBody}>
+        <Text style={styles.compactTitle} numberOfLines={2} ellipsizeMode="tail">
+          {property.title}
+        </Text>
+        <View style={styles.locationRow}>
+          <AppIcon name="location" size="xs" color={colors.textMuted} />
+          <Text style={styles.compactLocation} numberOfLines={1} ellipsizeMode="tail">
+            {property.city.name}
+          </Text>
+        </View>
+        <View style={styles.priceRow}>
+          <Text style={styles.compactPrice} numberOfLines={1} ellipsizeMode="tail">
+            {formatListingPrice(property.price, property.priceCurrency, language)}
+          </Text>
+          {property.roi !== null && (
+            <Text style={styles.compactRoi} numberOfLines={1}>{formatROI(property.roi)}</Text>
+          )}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// ============================================
 // REMOTE ROW — Explore's Supabase catalogue
 // ============================================
 

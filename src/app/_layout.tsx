@@ -32,14 +32,18 @@ import { ThemeProvider, makeStyles, useTheme } from '@/context/ThemeContext';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import { FavoritesProvider } from '@/context/FavoritesContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
+import { MarketProvider, useMarket } from '@/context/MarketContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 function RootNavigator() {
   const styles = useStyles();
   const { isReady } = useLanguage();
+  const { isMarketReady } = useMarket();
+  const { isLoading: isAuthLoading } = useAuth();
   const { isDark, colors } = useTheme();
   const [fontsLoaded] = useFonts(fontAssets);
 
-  if (!isReady || !fontsLoaded) {
+  if (!isReady || !isMarketReady || isAuthLoading || !fontsLoaded) {
     // Same colour as the splash so the handover shows no white flash
     return <View style={styles.placeholder} />;
   }
@@ -57,6 +61,7 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(main)" />
         <Stack.Screen name="(partner)" />
+        <Stack.Screen name="(admin)" />
       </Stack>
     </>
   );
@@ -68,11 +73,15 @@ export default function RootLayout() {
       <LanguageProvider>
         <ThemeProvider>
           <CurrencyProvider>
-            <FavoritesProvider>
-              <NotificationsProvider>
-                <RootNavigator />
-              </NotificationsProvider>
-            </FavoritesProvider>
+            <MarketProvider>
+              <AuthProvider>
+                <FavoritesProvider>
+                  <NotificationsProvider>
+                    <RootNavigator />
+                  </NotificationsProvider>
+                </FavoritesProvider>
+              </AuthProvider>
+            </MarketProvider>
           </CurrencyProvider>
         </ThemeProvider>
       </LanguageProvider>

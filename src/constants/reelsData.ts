@@ -17,7 +17,7 @@ export interface Reel {
 
 // The feed deliberately contains only these bundled, real-estate demo clips.
 // Keep this order stable: Madinah → land → Dubai → villa tour.
-export const reels: Reel[] = [
+const DEMO_REELS: Reel[] = [
   {
     id: 'reel-madinah',
     videoKey: 'madinah',
@@ -68,3 +68,17 @@ export const reels: Reel[] = [
     publishedAt: '28 мая 2026',
   },
 ];
+
+/**
+ * The Reels feed.
+ *
+ * PRE-TESTFLIGHT: cut to the first demo clip only. The remaining entries are
+ * kept above rather than deleted so the full demo set is one number away when
+ * real partner reels replace it — restoring the feed is a slice change, not a
+ * data re-entry job.
+ *
+ * This is a mock/demo layer and nothing else: Reels does not read Supabase, so
+ * narrowing it touches no production row, no storage object and no
+ * property_media record.
+ */
+export const reels: Reel[] = DEMO_REELS.slice(0, 1);

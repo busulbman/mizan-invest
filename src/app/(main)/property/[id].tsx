@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -25,6 +25,7 @@ import { AppConfig } from '@/constants/config';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 import { getPropertyById, RemoteProperty } from '@/lib/properties';
+import { goBackOrHome } from '@/lib/navigation';
 
 type DetailStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -103,7 +104,7 @@ export default function PropertyDetailScreen() {
         icon="warning"
         title={t('propertyNotFound')}
         actionTitle={t('back')}
-        onAction={() => router.replace('/(main)/explore')}
+        onAction={goBackOrHome}
       />
     );
   }
@@ -123,7 +124,7 @@ export default function PropertyDetailScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <Animated.View entering={FadeIn.delay(150)} style={[styles.topControls, { top: insets.top + 10 }]}>
-        <IconButton icon="back" onPress={() => router.back()} accessibilityLabel={t('back')} variant="glass" size={44} />
+        <IconButton icon="back" onPress={goBackOrHome} accessibilityLabel={t('back')} variant="glass" size={44} />
         <View style={styles.topActions}>
           <IconButton icon="share" onPress={handleShare} accessibilityLabel={t('share')} variant="glass" size={44} />
           <FavoriteButton propertyId={property.id} variant="glass" size={44} />

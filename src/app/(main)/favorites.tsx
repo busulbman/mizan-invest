@@ -14,12 +14,13 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { AppIcon, Button } from '@/components/ui';
+import { AppIcon, Button, IconButton } from '@/components/ui';
 import { PropertyRow } from '@/components/cards';
 import { getPropertiesByIds } from '@/constants/mockData';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { goToParent } from '@/lib/navigation';
 
 export default function FavoritesScreen() {
   const styles = useStyles();
@@ -35,9 +36,13 @@ export default function FavoritesScreen() {
   return (
     <View style={styles.container}>
       <Animated.View entering={FadeIn} style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
-          {t('favoritesTitle')}
-        </Text>
+        <View style={styles.titleRow}>
+          <IconButton icon="back" onPress={() => goToParent('/(main)/profile')} accessibilityLabel={t('back')} variant="surface" size={40} />
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+            {t('favoritesTitle')}
+          </Text>
+          <View style={styles.titleSpacer} />
+        </View>
         <Text style={styles.subtitle} numberOfLines={2} ellipsizeMode="tail">
           {t('favoritesSubtitle')}
         </Text>
@@ -100,14 +105,24 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing.screenHorizontal,
     paddingBottom: t.spacing.smd,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.smd,
+  },
+  titleSpacer: { width: 40 },
   title: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
     ...t.typography.h2,
     color: t.colors.text,
   },
   subtitle: {
     ...t.typography.caption,
     color: t.colors.textSecondary,
-    marginTop: 2,
+    marginTop: 6,
+    textAlign: 'center',
   },
   content: {
     paddingBottom: t.spacing.section,

@@ -24,12 +24,14 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated'
 import { Images } from '@/constants/images';
 import { AppIcon, Badge, Button, LanguagePicker, LogoMark, RemoteImage } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
+import { useMarket } from '@/context/MarketContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function WelcomeScreen() {
   const styles = useStyles();
   const { colors, gradients } = useTheme();
   const { t } = useLanguage();
+  const { hasChosenMarket } = useMarket();
   const insets = useSafeAreaInsets();
 
   return (
@@ -77,7 +79,7 @@ export default function WelcomeScreen() {
           <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.actions}>
             <Button
               title={t('continueAsGuest')}
-              onPress={() => router.replace('/(main)/home')}
+              onPress={() => router.replace(hasChosenMarket ? '/(main)/home' : '/(auth)/market')}
               variant="gold"
               size="lg"
             />

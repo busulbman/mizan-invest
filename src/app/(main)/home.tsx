@@ -7,18 +7,12 @@
  * rather than one long vertical page, which is what makes it read as a
  * mobile app instead of a scrolled-down website.
  *
- * Rails: featured · Madinah · new · high potential · AI insights ·
- * popular cities · verified partners · recently viewed.
- *
- * The country chips are not decorative — they filter the listing rails
- * in place, and each rail hides itself when the active filter leaves it
- * empty, so the screen never shows an empty row.
- *
- * TODO: Replace the demo catalogue with the listings API
+ * Listing rails and counts are derived from the remote published catalogue.
+ * MarketContext scopes that catalogue before it reaches this screen.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,77 +20,143 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AppConfig } from '@/constants/config';
 import { Images } from '@/constants/images';
-import {
-  aiInsights,
-  categories,
-  cities,
-  countries,
-  countPropertiesByCity,
-  countPropertiesByType,
-  featuredProperties,
-  highYieldProperties,
-  madinahProperties,
-  newestProperties,
-  properties,
-  recentlyViewedProperties,
-  verifiedPartners,
-} from '@/constants/mockData';
-import {
-  cityNameKey,
-  countryNameKey,
-  propertyTypePluralKey,
-} from '@/constants/localizedData';
+import { propertyTypePluralKey } from '@/constants/localizedData';
+import { IconName } from '@/constants/icons';
 import {
   AppIcon,
   Badge,
   Button,
   LogoMark,
+  MarketPicker,
   RemoteImage,
   SectionHeader,
 } from '@/components/ui';
 import {
   CategoryCard,
   CityCard,
-  InsightCard,
-  PartnerCard,
-  PropertyCompactCard,
-  PropertyPosterCard,
-  PropertyRow,
+  RemotePropertyCompactCard,
+  RemotePropertyPosterCard,
+  RemotePropertyRow,
 } from '@/components/cards';
 import { useLanguage } from '@/context/LanguageContext';
+import { useMarket } from '@/context/MarketContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { useTabReselect } from '@/context/TabRefreshContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { getPropertiesByCountry, getPublishedProperties, RemoteProperty } from '@/lib/properties';
+
+const HOME_CATEGORIES: ReadonlyArray<{ id: RemoteProperty['type']; icon: IconName }> = [
+  { id: 'apartment', icon: 'apartment' },
+  { id: 'villa', icon: 'villa' },
+  { id: 'land', icon: 'land' },
+  { id: 'commercial', icon: 'commercial' },
+];
 
 export default function HomeScreen() {
   const styles = useStyles();
   const { colors, gradients } = useTheme();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const { selectedMarket } = useMarket();
   const insets = useSafeAreaInsets();
   const { unreadCount } = useNotifications();
-
-  const [country, setCountry] = useState('all');
   const scrollRef = useRef<ScrollView>(null);
+  const requestId = useRef(0);
+  const [remoteProperties, setRemoteProperties] = useState<RemoteProperty[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadProperties = useCallback(async (isPullToRefresh = false) => {
+    const currentRequest = ++requestId.current;
+    if (isPullToRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+      // Never display the previous market while the next market is loading.
+      setRemoteProperties([]);
+    }
+    setLoadError(null);
+
+    try {
+      const data = selectedMarket
+        ? await getPropertiesByCountry(selectedMarket, language)
+        : await getPublishedProperties(language);
+      if (requestId.current === currentRequest) setRemoteProperties(data);
+    } catch (error) {
+      if (requestId.current === currentRequest) {
+        setLoadError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      if (requestId.current === currentRequest) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [language, selectedMarket]);
+
+  useEffect(() => {
+    void loadProperties();
+    return () => {
+      requestId.current += 1;
+    };
+  }, [loadProperties]);
 
   useTabReselect('home', useCallback(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []));
+    void loadProperties(true);
+  }, [loadProperties]));
 
-  // One predicate drives every rail, so the chips filter the whole feed
-  const matchesCountry = useMemo(
-    () => (countryCode: string) => country === 'all' || countryCode === country,
-    [country]
+  const featured = useMemo(() => {
+    const featuredListings = remoteProperties.filter((property) => property.featured);
+    return (featuredListings.length > 0 ? featuredListings : remoteProperties).slice(0, 6);
+  }, [remoteProperties]);
+  const madinah = useMemo(
+    () => remoteProperties.filter((property) => property.city.slug.toLowerCase() === 'madinah'),
+    [remoteProperties],
   );
-
-  const featured = featuredProperties.filter((p) => matchesCountry(p.countryCode));
-  const madinah = madinahProperties.filter((p) => matchesCountry(p.countryCode));
-  const newest = newestProperties.filter((p) => matchesCountry(p.countryCode));
-  const highYield = highYieldProperties.filter((p) => matchesCountry(p.countryCode)).slice(0, 3);
-  const cityList = cities.filter((c) => matchesCountry(c.countryCode));
-  const partners = verifiedPartners.filter((p) => matchesCountry(p.countryCode));
+  const newest = useMemo(() => remoteProperties.slice(0, 6), [remoteProperties]);
+  const highPotential = useMemo(
+    () => [...remoteProperties]
+      .sort((left, right) => {
+        if (left.investmentScore === null) return 1;
+        if (right.investmentScore === null) return -1;
+        return right.investmentScore - left.investmentScore;
+      })
+      .slice(0, 3),
+    [remoteProperties],
+  );
+  const cityList = useMemo(() => {
+    const byCity = new Map<string, { slug: string; name: string; image: string; count: number }>();
+    remoteProperties.forEach((property) => {
+      const existing = byCity.get(property.city.slug);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byCity.set(property.city.slug, {
+          slug: property.city.slug,
+          name: property.city.name,
+          image: property.image,
+          count: 1,
+        });
+      }
+    });
+    return Array.from(byCity.values()).sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, language));
+  }, [language, remoteProperties]);
 
   const goToExplore = (params?: Record<string, string>) =>
     router.push({ pathname: '/(main)/explore', params });
+
+  if (isLoading && remoteProperties.length === 0) {
+    return <HomeDataState loading title={t('loading')} />;
+  }
+
+  if (loadError && remoteProperties.length === 0) {
+    return <HomeDataState title={t('networkError')} actionTitle={t('tryAgain')} onAction={() => void loadProperties()} />;
+  }
+
+  if (remoteProperties.length === 0) {
+    return <HomeDataState title={t('noResults')} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -107,6 +167,13 @@ export default function HomeScreen() {
           { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 96 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void loadProperties(true)}
+            tintColor={colors.accent}
+          />
+        }
       >
         {/* ---------------------------------------- */}
         {/* HEADER */}
@@ -176,40 +243,9 @@ export default function HomeScreen() {
           </LinearGradient>
         </Animated.View>
 
-        {/* ---------------------------------------- */}
-        {/* COUNTRY FILTER */}
-        {/* ---------------------------------------- */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {countries.map((item) => {
-            const active = country === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setCountry(item.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={({ pressed }) => [
-                  styles.chip,
-                  active && styles.chipActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.chipFlag}>{item.flag}</Text>
-                <Text
-                  style={[styles.chipLabel, active && styles.chipLabelActive]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {t(countryNameKey(item.id))}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View style={styles.marketPickerRow}>
+          <MarketPicker variant="compact" />
+        </View>
 
         {/* ---------------------------------------- */}
         {/* CATEGORIES */}
@@ -225,12 +261,12 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.rail}
           >
-            {categories.map((category) => (
+            {HOME_CATEGORIES.map((category) => (
               <CategoryCard
                 key={category.id}
                 name={t(propertyTypePluralKey(category.id))}
                 icon={category.icon}
-                count={countPropertiesByType(category.id)}
+                count={remoteProperties.filter((property) => property.type === category.id).length}
                 onPress={() => goToExplore({ type: category.id })}
               />
             ))}
@@ -254,7 +290,7 @@ export default function HomeScreen() {
               contentContainerStyle={styles.rail}
             >
               {featured.map((property) => (
-                <PropertyPosterCard key={property.id} property={property} />
+                <RemotePropertyPosterCard key={property.id} property={property} />
               ))}
             </ScrollView>
           </Animated.View>
@@ -277,7 +313,7 @@ export default function HomeScreen() {
               contentContainerStyle={styles.rail}
             >
               {madinah.map((property) => (
-                <PropertyCompactCard key={property.id} property={property} />
+                <RemotePropertyCompactCard key={property.id} property={property} />
               ))}
             </ScrollView>
           </View>
@@ -300,7 +336,7 @@ export default function HomeScreen() {
               contentContainerStyle={styles.rail}
             >
               {newest.map((property) => (
-                <PropertyCompactCard key={property.id} property={property} />
+                <RemotePropertyCompactCard key={property.id} property={property} />
               ))}
             </ScrollView>
           </View>
@@ -309,7 +345,7 @@ export default function HomeScreen() {
         {/* ---------------------------------------- */}
         {/* HIGH POTENTIAL */}
         {/* ---------------------------------------- */}
-        {highYield.length > 0 && (
+        {highPotential.length > 0 && (
           <View style={styles.section}>
             <SectionHeader
               title={t('highPotential')}
@@ -318,34 +354,12 @@ export default function HomeScreen() {
               onActionPress={() => goToExplore()}
             />
             <View style={styles.list}>
-              {highYield.map((property) => (
-                <PropertyRow key={property.id} property={property} />
+              {highPotential.map((property) => (
+                <RemotePropertyRow key={property.id} property={property} />
               ))}
             </View>
           </View>
         )}
-
-        {/* ---------------------------------------- */}
-        {/* AI INSIGHTS */}
-        {/* ---------------------------------------- */}
-        <View style={styles.section}>
-          <SectionHeader title={t('aiInsights')} subtitle={t('marketAnalysis')} />
-          <View style={styles.insightGrid}>
-            {aiInsights.map((insight) => (
-              <InsightCard
-                key={insight.id}
-                label={t(insight.labelKey)}
-                // The risk tile stores a key so it translates like the rest
-                value={insight.id === '4' ? t('low') : insight.value}
-                trend={insight.trend}
-                tone={insight.tone}
-              />
-            ))}
-          </View>
-          <Text style={styles.disclaimer} numberOfLines={3}>
-            {t('aiDisclaimer')}
-          </Text>
-        </View>
 
         {/* ---------------------------------------- */}
         {/* POPULAR CITIES */}
@@ -363,71 +377,46 @@ export default function HomeScreen() {
             >
               {cityList.map((city) => (
                 <CityCard
-                  key={city.id}
-                  name={t(cityNameKey(city.id))}
+                  key={city.slug}
+                  name={city.name}
                   image={city.image}
-                  count={countPropertiesByCity(city.id)}
-                  onPress={() => goToExplore({ city: city.id })}
+                  count={city.count}
+                  onPress={() => goToExplore({ city: city.slug })}
                 />
               ))}
             </ScrollView>
           </View>
         )}
-
-        {/* ---------------------------------------- */}
-        {/* VERIFIED PARTNERS */}
-        {/* ---------------------------------------- */}
-        {partners.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader
-              title={t('verifiedPartners')}
-              subtitle={t('verifiedPartnersSubtitle')}
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rail}
-            >
-              {partners.map((partner) => (
-                <PartnerCard
-                  key={partner.id}
-                  partner={partner}
-                  onPress={() =>
-                    goToExplore({
-                      // Opening a partner filters Explore to their market
-                      country: partner.countryCode,
-                      verified: '1',
-                    })
-                  }
-                />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* ---------------------------------------- */}
-        {/* RECENTLY VIEWED */}
-        {/* ---------------------------------------- */}
-        <View style={[styles.section, styles.lastSection]}>
-          <SectionHeader
-            title={t('recentlyViewed')}
-            subtitle={t('recentlyViewedSubtitle')}
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.rail}
-          >
-            {recentlyViewedProperties.map((property) => (
-              <PropertyCompactCard key={property.id} property={property} />
-            ))}
-          </ScrollView>
-        </View>
 
         <Text style={styles.footerNote} numberOfLines={2}>
-          {properties.length} {t('objectsShort')} · {t('demoExchangeRate')}
+          {remoteProperties.length} {t('objectsShort')}
         </Text>
       </ScrollView>
+    </View>
+  );
+}
+
+function HomeDataState({
+  title,
+  loading = false,
+  actionTitle,
+  onAction,
+}: {
+  title: string;
+  loading?: boolean;
+  actionTitle?: string;
+  onAction?: () => void;
+}) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+
+  return (
+    <View style={[styles.container, styles.dataState]}>
+      {loading ? <ActivityIndicator size="large" color={colors.accent} /> : <AppIcon name="warning" size="xl" color={colors.textMuted} />}
+      <Text style={styles.dataStateTitle}>{title}</Text>
+      {actionTitle && onAction && (
+        <Button title={actionTitle} onPress={onAction} variant="secondary" size="md" fullWidth={false} />
+      )}
     </View>
   );
 }
@@ -439,6 +428,17 @@ const useStyles = makeStyles((t) => ({
   },
   content: {
     paddingBottom: t.spacing.section,
+  },
+  dataState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing.md,
+    paddingHorizontal: t.spacing.section,
+  },
+  dataStateTitle: {
+    ...t.typography.body,
+    color: t.colors.textSecondary,
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.75,
@@ -544,6 +544,11 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing.screenHorizontal,
     paddingVertical: t.spacing.md,
     gap: t.spacing.sm,
+  },
+  marketPickerRow: {
+    alignItems: 'flex-start',
+    paddingHorizontal: t.spacing.screenHorizontal,
+    paddingVertical: t.spacing.md,
   },
   chip: {
     flexDirection: 'row',

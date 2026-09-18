@@ -33,13 +33,16 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { AppIcon, Badge, Button, IconButton, LogoMark } from '@/components/ui';
+import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { goBackOrHome } from '@/lib/navigation';
 
 export default function PartnerLoginScreen() {
   const styles = useStyles();
   const { colors, gradients } = useTheme();
   const { t } = useLanguage();
+  const { signIn } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
@@ -47,13 +50,18 @@ export default function PartnerLoginScreen() {
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) return;
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      // `replace` so the dashboard is not stacked on the login form
-      router.replace('/(partner)/dashboard');
-    }, 450);
+    const { error } = await signIn(email, password);
+    setSubmitting(false);
+    if (error) {
+      Alert.alert(t('error'), error.message || t('authRequestFailed'));
+      return;
+    }
+    // The protected route validates the refreshed server role and membership.
+    // A regular customer is safely redirected to Home by that guard.
+    router.replace('/(partner)/dashboard');
   };
 
   return (
@@ -75,7 +83,7 @@ export default function PartnerLoginScreen() {
             <Animated.View entering={FadeIn.delay(80)} style={styles.backRow}>
               <IconButton
                 icon="back"
-                onPress={() => router.back()}
+                onPress={goBackOrHome}
                 accessibilityLabel={t('back')}
                 variant="glass"
                 size={44}

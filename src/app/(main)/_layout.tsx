@@ -63,6 +63,14 @@ function MainTabs() {
 
   return (
     <Tabs
+        initialRouteName="home"
+        // Settings, Profile, Favorites, Notifications, Property detail and the
+        // partner application are hidden TABS (href: null), not stack screens,
+        // so router.back() from them is resolved by this prop rather than by a
+        // stack. React Navigation defaults to 'firstRoute', which is `explore`
+        // below — that is why back used to land on Explore. 'history' returns
+        // to the previously visited route instead.
+        backBehavior="history"
         screenListeners={({ route, navigation }) => ({
           tabPress: () => {
             const state = navigation.getState();
@@ -161,6 +169,8 @@ function MainTabs() {
       {/* Pushed routes — reachable by navigation, never shown as a tab */}
       <Tabs.Screen name="property/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="settings" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="partner-application" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null, tabBarStyle: { display: 'none' } }} />
     </Tabs>
   );
 }

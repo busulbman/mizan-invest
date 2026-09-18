@@ -42,7 +42,19 @@
       "expo-image",
       "expo-web-browser",
       "expo-video",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Mizan Invest uses your location once to suggest an investment market."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mizan Invest needs access to your photos so you can add images and video to a property listing."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

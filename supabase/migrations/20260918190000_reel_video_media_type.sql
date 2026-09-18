@@ -1,0 +1,56 @@
+-- =============================================================================
+-- MIZAN INVEST — PHASE 4B.2
+-- 20260918190000_reel_video_media_type.sql
+-- Adds 'reel_video' to public.media_type
+-- =============================================================================
+-- WHY
+--   Phase 4B.1 could not store a Reel separately from a property tour: both
+--   would have landed on media_type = 'video'. This adds the missing value so
+--   the two are distinguishable at the database level rather than by
+--   convention.
+--
+-- NON-DESTRUCTIVE
+--   ALTER TYPE ... ADD VALUE only appends to the enum. No table is rewritten,
+--   no existing row changes, and every current value keeps its meaning. There
+--   is no DROP, UPDATE or DELETE in this file.
+--
+-- FORWARD-ONLY
+--   PostgreSQL cannot remove an enum value without rewriting every table that
+--   uses the type. Treat this as permanent; see the rollback note at the end.
+--
+-- TRANSACTION NOTE
+--   PostgreSQL 12+ allows ADD VALUE inside a transaction block (which is how
+--   the Supabase CLI applies migrations), but the new value may NOT be
+--   referenced in that same transaction. This migration therefore only
+--   declares the value. Nothing here inserts, compares against, or indexes
+--   'reel_video' — any such statement would fail with "unsafe use of new value
+--   of enum type". Policies and constraints that need it come later, if ever.
+--
+-- SECURITY
+--   Storage and RLS are deliberately untouched. Existing property_media and
+--   storage.objects policies key off the owning property's partner and
+--   publication_status, never off media_type, so a reel inherits exactly the
+--   same boundary as a photo or a property video with no policy change.
+-- =============================================================================
+
+alter type public.media_type add value if not exists 'reel_video';
+
+-- -----------------------------------------------------------------------------
+-- Verification (run manually after applying; not part of the migration)
+-- -----------------------------------------------------------------------------
+--   select enumlabel from pg_enum e
+--   join pg_type t on t.oid = e.enumtypid
+--   where t.typname = 'media_type' order by e.enumsortorder;
+--   -- expect: image, video, floor_plan, document, reel_video
+--
+-- -----------------------------------------------------------------------------
+-- Rollback
+-- -----------------------------------------------------------------------------
+--   There is no safe DROP for an enum value. If 'reel_video' has to be
+--   withdrawn, the reversal is:
+--     1. repoint or delete every property_media row using it
+--     2. create a replacement type without the value
+--     3. ALTER TABLE ... ALTER COLUMN ... TYPE using the new type
+--     4. drop the old type
+--   That rewrites the table and is a data-loss risk, so prefer leaving an
+--   unused value in place over removing it.

@@ -13,7 +13,8 @@ export { Button, IconButton } from './Button';
 export { Chip } from './Chip';
 export { LogoMark } from './LogoMark';
 export { OnboardingSlide } from './OnboardingSlide';
-export { AppearancePicker, CurrencyPicker, LanguagePicker } from './Preferences';
+export { AppearancePicker, CurrencyPicker, LanguagePicker, MarketPicker } from './Preferences';
+export { PromptSheet } from './PromptSheet';
 export { RemoteImage } from './RemoteImage';
 export { SectionHeader } from './SectionHeader';
 
@@ -25,5 +26,6 @@ export type { ChipProps } from './Chip';
 export type { LogoMarkProps } from './LogoMark';
 export type { OnboardingSlideProps } from './OnboardingSlide';
 export type { PickerVariant } from './Preferences';
+export type { PromptSheetProps } from './PromptSheet';
 export type { RemoteImageProps } from './RemoteImage';
 export type { SectionHeaderProps } from './SectionHeader';

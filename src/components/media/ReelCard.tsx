@@ -3,7 +3,7 @@ import { Linking, Pressable, Share, StyleSheet, Text, useWindowDimensions, View 
 import { useEventListener } from 'expo';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { VideoView, useVideoPlayer, type VideoPlayer } from 'expo-video';
 
 import { FavoriteButton } from '@/components/cards/FavoriteButton';
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -27,6 +27,32 @@ export interface ReelCardProps {
 
 const LONG_PRESS_DELAY = 280;
 
+/**
+ * PLAYER LIFETIME
+ *
+ * `useVideoPlayer` releases its native shared object when the component
+ * unmounts. Any JavaScript write after that point throws
+ * `NativeSharedObjectNotFoundException: Unable to find the native shared
+ * object associated with given JavaScript object`, which surfaces as a red
+ * Render Error rather than a caught failure.
+ *
+ * Two things used to reach a released player:
+ *   1. an unmount cleanup that wrote `player.playbackRate = 1` — it ran during
+ *      the very teardown that disposes the player
+ *   2. `longPressTimer` firing `startSpeedPlayback` after the card scrolled
+ *      out of the window and unmounted
+ *
+ * The feed makes both easy to hit: the FlatList uses `removeClippedSubviews`
+ * with `windowSize={3}`, so a fast swipe unmounts cards while their timers and
+ * effects are still in flight.
+ *
+ * The rule this component now follows: NOTHING touches the player after
+ * unmount, and the player is never written to in a cleanup. `withPlayer` is
+ * the single gate — it checks the mounted flag first, so the ordinary case is
+ * prevented rather than caught.
+ */
+
+
 export function ReelCard({ reel, isActive, height, topInset, bottomInset, muted, onToggleMute }: ReelCardProps) {
   const { t } = useLanguage();
   const { typography, colors } = useTheme();
@@ -47,6 +73,7 @@ export function ReelCard({ reel, isActive, height, topInset, bottomInset, muted,
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
   const wasActive = useRef(false);
+  const isMountedRef = useRef(true);
 
   const player = useVideoPlayer(LocalVideos[reel.videoKey], (instance) => {
     instance.loop = false;
@@ -54,84 +81,150 @@ export function ReelCard({ reel, isActive, height, topInset, bottomInset, muted,
     instance.timeUpdateEventInterval = 0.25;
   });
 
+  /**
+   * The only way this component touches the native player.
+   *
+   * The mounted check is the actual fix: after unmount the native object is
+   * gone and the call is skipped entirely. The try/catch is not the fix — it
+   * only covers the narrow window where native teardown completes between the
+   * check and the call, which JavaScript cannot observe.
+   */
+  const withPlayer = useCallback(
+    (action: (instance: VideoPlayer) => void) => {
+      if (!isMountedRef.current) return;
+      try {
+        action(player);
+      } catch {
+        // Player already released by native teardown; nothing left to act on.
+      }
+    },
+    [player]
+  );
+
+  /** Reads a value off the player, falling back when it is gone. */
+  const readPlayer = useCallback(
+    <T,>(read: (instance: VideoPlayer) => T, fallback: T): T => {
+      if (!isMountedRef.current) return fallback;
+      try {
+        return read(player);
+      } catch {
+        return fallback;
+      }
+    },
+    [player]
+  );
+
+  // Mount flag + timer teardown. The player is deliberately NOT touched here.
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      hideTimer.current = null;
+      longPressTimer.current = null;
+    };
+  }, []);
+
+  // Native events can land during teardown, so each handler checks the flag
+  // before touching React state or reading back off the player.
   useEventListener(player, 'statusChange', ({ status }) => {
+    if (!isMountedRef.current) return;
     if (status === 'readyToPlay' || status === 'error') setIsVideoReady(true);
   });
 
   useEventListener(player, 'timeUpdate', ({ currentTime: nextTime }) => {
+    if (!isMountedRef.current) return;
     setCurrentTime(nextTime);
-    if (player.duration > 0) setDuration(player.duration);
+    const nextDuration = readPlayer((instance) => instance.duration, 0);
+    if (nextDuration > 0) setDuration(nextDuration);
   });
-  useEventListener(player, 'playingChange', ({ isPlaying: nextPlaying }) => setIsPlaying(nextPlaying));
+  useEventListener(player, 'playingChange', ({ isPlaying: nextPlaying }) => {
+    if (!isMountedRef.current) return;
+    setIsPlaying(nextPlaying);
+  });
   useEventListener(player, 'playToEnd', () => {
+    if (!isMountedRef.current) return;
     setEnded(true);
     setPausedByUser(true);
     setControlsVisible(true);
   });
 
   useEffect(() => {
-    player.muted = muted;
-  }, [muted, player]);
+    withPlayer((instance) => {
+      instance.muted = muted;
+    });
+  }, [muted, withPlayer]);
 
   useEffect(() => {
-    if (isActive && !pausedByUser && !ended) {
-      player.play();
-    } else {
-      player.pause();
-    }
-  }, [ended, isActive, pausedByUser, player]);
+    withPlayer((instance) => {
+      if (isActive && !pausedByUser && !ended) {
+        instance.play();
+      } else {
+        instance.pause();
+      }
+    });
+  }, [ended, isActive, pausedByUser, withPlayer]);
 
   useEffect(() => {
     if (isActive && !wasActive.current) {
-      player.currentTime = 0;
-      player.playbackRate = 1;
+      withPlayer((instance) => {
+        instance.currentTime = 0;
+        instance.playbackRate = 1;
+      });
       setCurrentTime(0);
       setPausedByUser(false);
       setEnded(false);
     }
 
     if (!isActive) {
-      player.playbackRate = 1;
+      // An inactive card resets its own rate while it is still mounted, which
+      // is why the unmount cleanup no longer needs to.
+      withPlayer((instance) => {
+        instance.playbackRate = 1;
+      });
       setIsSpeeding(false);
     }
 
     wasActive.current = isActive;
-  }, [isActive, player]);
+  }, [isActive, withPlayer]);
 
   useEffect(() => {
     if (!controlsVisible || !isPlaying) return;
-    hideTimer.current = setTimeout(() => setControlsVisible(false), 5000);
+    hideTimer.current = setTimeout(() => {
+      if (isMountedRef.current) setControlsVisible(false);
+    }, 5000);
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = null;
     };
   }, [controlsVisible, isPlaying]);
 
-  useEffect(() => () => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    player.playbackRate = 1;
-  }, [player]);
-
   const togglePlayback = () => {
     if (ended) {
-      player.currentTime = 0;
+      withPlayer((instance) => {
+        instance.currentTime = 0;
+        instance.play();
+      });
       setCurrentTime(0);
       setEnded(false);
       setPausedByUser(false);
-      player.play();
     } else if (isPlaying) {
       setPausedByUser(true);
-      player.pause();
+      withPlayer((instance) => instance.pause());
     } else {
       setPausedByUser(false);
-      player.play();
+      withPlayer((instance) => instance.play());
     }
     setControlsVisible(true);
   };
 
   const seekTo = (time: number) => {
-    const next = Math.max(0, Math.min(duration || player.duration || 0, time));
-    player.currentTime = next;
+    const total = duration || readPlayer((instance) => instance.duration, 0) || 0;
+    const next = Math.max(0, Math.min(total, time));
+    withPlayer((instance) => {
+      instance.currentTime = next;
+    });
     setCurrentTime(next);
     if (ended) setEnded(false);
   };
@@ -146,24 +239,30 @@ export function ReelCard({ reel, isActive, height, topInset, bottomInset, muted,
     longPressTimer.current = null;
 
     if (didLongPress.current) {
-      player.playbackRate = 1;
+      withPlayer((instance) => {
+        instance.playbackRate = 1;
+      });
       setIsSpeeding(false);
     }
-  }, [player]);
+  }, [withPlayer]);
 
+  // Runs from a timer, so it can be reached after the card unmounts mid-swipe.
   const startSpeedPlayback = useCallback(() => {
+    if (!isMountedRef.current) return;
     didLongPress.current = true;
-    player.playbackRate = 2;
+    withPlayer((instance) => {
+      instance.playbackRate = 2;
+      if (ended) instance.currentTime = 0;
+      instance.play();
+    });
     if (ended) {
-      player.currentTime = 0;
       setCurrentTime(0);
       setEnded(false);
     }
     setPausedByUser(false);
     setControlsVisible(true);
     setIsSpeeding(true);
-    player.play();
-  }, [ended, player]);
+  }, [ended, withPlayer]);
 
   const handleVideoPressIn = (locationX: number) => {
     didLongPress.current = false;
