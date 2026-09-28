@@ -85,8 +85,32 @@ interface AuthContextValue {
   signUp: (input: { email: string; password: string; fullName?: string }) => Promise<{ needsEmailConfirmation: boolean; error: Error | null; identity: ResolvedIdentity }>;
   signOut: () => Promise<{ error: Error | null }>;
   sendPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  /**
+   * Asks for a NEW signup confirmation link.
+   *
+   * Returns only whether the REQUEST was accepted. Nothing available to the
+   * client can prove an email was delivered, so nothing here claims it was.
+   * `rateLimited` is surfaced separately because it is the expected answer, not
+   * a malfunction: confirmation email sending is deliberately throttled.
+   */
+  resendConfirmation: (email: string) => Promise<{ error: Error | null; rateLimited: boolean }>;
+  /** Result of the last email-link exchange. See `AuthLinkStatus`. */
+  authLinkStatus: AuthLinkStatus;
   updatePassword: (password: string) => Promise<{ error: Error | null }>;
 }
+
+/**
+ * Outcome of the most recent inbound auth deep link.
+ *
+ * `auth-complete` needs this. Previously the token exchange result was thrown
+ * away, so a screen could not tell "still working" from "this link is dead" and
+ * rendered an empty view forever on an expired link.
+ *
+ * Starts as 'processing' because `Linking.getInitialURL()` resolves
+ * asynchronously: assuming 'idle' first would flash an error on a cold start
+ * from a perfectly valid link.
+ */
+export type AuthLinkStatus = 'processing' | 'idle' | 'failed';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -115,6 +139,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [partnerMemberships, setPartnerMemberships] = useState<PartnerMembership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [authLinkStatus, setAuthLinkStatus] = useState<AuthLinkStatus>('processing');
 
   const clearIdentity = useCallback(() => {
     if (!mountedRef.current) return;
@@ -247,6 +272,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [loadIdentity]);
 
+  /**
+   * Consumes an inbound auth link and RECORDS whether it worked.
+   *
+   * Every branch now reports an outcome. An expired or already-used
+   * confirmation link fails here, and `authLinkStatus` is what lets
+   * `auth-complete` say so instead of showing a blank screen.
+   */
   const handleInboundAuthUrl = useCallback(async (url: string) => {
     const params = parseAuthUrl(url);
     const code = typeof params.code === 'string' ? params.code : null;
@@ -254,19 +286,52 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const refreshToken = typeof params.refresh_token === 'string' ? params.refresh_token : null;
     const tokenHash = typeof params.token_hash === 'string' ? params.token_hash : null;
     const type = typeof params.type === 'string' ? params.type as EmailOtpType : null;
+    // Supabase appends these to the redirect when it rejects the link itself,
+    // e.g. otp_expired. There is nothing to exchange in that case.
+    const linkError =
+      typeof params.error === 'string' || typeof params.error_code === 'string'
+        ? String(params.error_description ?? params.error_code ?? params.error)
+        : null;
 
-    if (code) {
-      await supabase.auth.exchangeCodeForSession(code);
+    const settle = (status: AuthLinkStatus) => {
+      if (mountedRef.current) setAuthLinkStatus(status);
+    };
+
+    if (linkError) {
+      console.warn('[auth] The email link was rejected before exchange.', linkError);
+      settle('failed');
       return;
     }
 
-    if (tokenHash && type) {
-      await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    // Not an auth link at all — a normal deep link. Nothing failed.
+    if (!code && !(tokenHash && type) && !(accessToken && refreshToken)) {
+      settle('idle');
       return;
     }
 
-    if (accessToken && refreshToken) {
-      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    settle('processing');
+    try {
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        settle(error ? 'failed' : 'idle');
+        return;
+      }
+      if (tokenHash && type) {
+        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+        settle(error ? 'failed' : 'idle');
+        return;
+      }
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        settle(error ? 'failed' : 'idle');
+      }
+    } catch (error) {
+      // A network failure mid-exchange is still a link the user cannot use.
+      console.warn('[auth] Could not complete the email link exchange.', error);
+      settle('failed');
     }
   }, []);
 
@@ -288,9 +353,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
       void handleInboundAuthUrl(url);
     });
-    void Linking.getInitialURL().then((url) => {
-      if (url) void handleInboundAuthUrl(url);
-    });
+    void Linking.getInitialURL()
+      .then((url) => {
+        // No launch URL means nothing is pending; clear the initial
+        // 'processing' so a normal cold start is not mistaken for a link.
+        if (url) return handleInboundAuthUrl(url);
+        if (mountedRef.current) setAuthLinkStatus('idle');
+        return undefined;
+      })
+      .catch(() => {
+        if (mountedRef.current) setAuthLinkStatus('idle');
+      });
 
     return () => {
       mountedRef.current = false;
@@ -337,6 +410,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return { error: error ? new Error(error.message) : null };
   }, []);
 
+  /**
+   * Re-requests the signup confirmation email.
+   *
+   * Uses the public client only — `auth.resend` needs nothing but the
+   * publishable key, cannot confirm anybody, and never touches service_role.
+   * `emailRedirectTo` is rebuilt the same way signUp builds it, so a resent
+   * link lands on the same route as the original.
+   */
+  const resendConfirmation = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: authRedirectUrl('auth-complete') },
+    });
+    // GoTrue reports throttling as 429 / over_email_send_rate_limit.
+    const rateLimited =
+      !!error &&
+      (error.status === 429 ||
+        /rate limit|too many requests|for security purposes/i.test(error.message));
+    return { error: error ? new Error(error.message) : null, rateLimited };
+  }, []);
+
   const updatePassword = useCallback(async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password });
     return { error: error ? new Error(error.message) : null };
@@ -358,11 +453,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       refresh,
       signIn,
       signUp,
+      resendConfirmation,
+      authLinkStatus,
       signOut,
       sendPasswordReset,
       updatePassword,
     };
-  }, [partnerMemberships, profile, refresh, roles, sendPasswordReset, session, signIn, signOut, signUp, isLoading, updatePassword, user]);
+  }, [authLinkStatus, partnerMemberships, profile, refresh, resendConfirmation, roles, sendPasswordReset, session, signIn, signOut, signUp, isLoading, updatePassword, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

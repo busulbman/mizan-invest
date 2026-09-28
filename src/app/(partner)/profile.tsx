@@ -11,6 +11,19 @@
  * different, private bucket. Keeping them apart means a partner employee's face
  * never becomes the company's public mark by accident.
  *
+ * PUBLIC DESCRIPTION
+ * The "about" text edited here is the partner's own PUBLIC description, shown
+ * to customers. It is NOT the private text they wrote on their application —
+ * that stays in `partner_applications`, is never shown here, and is no longer
+ * published on approval (migration 20260928110000). Keeping the two apart is
+ * the point: the application was written to Mizan and may contain a phone
+ * number; this is written to customers, where a phone number is forbidden.
+ *
+ * `partner_tr_no_contact` remains the authority on what may be published. This
+ * screen does not pre-screen or rewrite anything — it surfaces the database's
+ * refusal with the partner's own text left intact, because silently stripping a
+ * number out of someone's business description would hide the edit from them.
+ *
  * SCOPE
  * Private partner contact details are never rendered here. They live in
  * `private.partner_private`, a schema PostgREST does not serve, so this screen
@@ -18,7 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,6 +39,13 @@ import { AppIcon, Button } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
+import { CONTACT_INFO_ERROR } from '@/lib/partner';
+import {
+  ABOUT_TOO_LONG_ERROR,
+  getPartnerAbout,
+  MAX_PARTNER_ABOUT_CHARS,
+  updatePartnerAbout,
+} from '@/lib/partnerAbout';
 import { pickSingleImage } from '@/lib/pickImage';
 import {
   getPartnerIdentity,
@@ -49,6 +69,11 @@ export default function PartnerProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  /** Saved value vs. the text being typed, so Save can be disabled when clean. */
+  const [savedAbout, setSavedAbout] = useState('');
+  const [about, setAbout] = useState('');
+  const [savingAbout, setSavingAbout] = useState(false);
+
   const load = useCallback(async () => {
     if (!partnerId) {
       setLoading(false);
@@ -58,6 +83,9 @@ export default function PartnerProfileScreen() {
       const row = await getPartnerIdentity(partnerId);
       setIdentity(row);
       setLogoUrl(await getPartnerLogoUrl(row?.logoPath ?? null));
+      const text = await getPartnerAbout(partnerId);
+      setSavedAbout(text);
+      setAbout(text);
     } catch (error) {
       Alert.alert(t('couldNotLoad'), error instanceof Error ? error.message : t('pleaseTryAgain'));
     } finally {
@@ -123,7 +151,34 @@ export default function PartnerProfileScreen() {
     ]);
   }, [busy, identity?.logoPath, load, partnerId, t]);
 
+  const saveAbout = useCallback(async () => {
+    if (!partnerId || savingAbout) return;
+    setSavingAbout(true);
+    try {
+      await updatePartnerAbout(partnerId, about);
+      const next = about.trim();
+      setSavedAbout(next);
+      setAbout(next);
+      Alert.alert(t('descriptionSaved'));
+    } catch (error) {
+      // The constraint's verdict, made readable. The typed text is left exactly
+      // as it is so the partner can edit it themselves.
+      const message =
+        error instanceof Error && error.message === CONTACT_INFO_ERROR
+          ? t('descriptionContainsContact')
+          : error instanceof Error && error.message === ABOUT_TOO_LONG_ERROR
+            ? t('descriptionTooLong')
+            : error instanceof Error
+              ? error.message
+              : t('pleaseTryAgain');
+      Alert.alert(t('couldNotSaveDescription'), message);
+    } finally {
+      setSavingAbout(false);
+    }
+  }, [about, partnerId, savingAbout, t]);
+
   const hasLogo = Boolean(identity?.logoPath);
+  const aboutDirty = about.trim() !== savedAbout;
 
   return (
     <View style={styles.container}>
@@ -171,6 +226,35 @@ export default function PartnerProfileScreen() {
                 {t('membership')}: {partnerMemberships[0]?.memberRole ?? '—'}
               </Text>
               <Text style={styles.meta}>{t('partnerProfileNote')}</Text>
+            </View>
+
+            {/* The PUBLIC description. Separate from the private application text
+                by design — see the header note. */}
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>{t('publicDescription')}</Text>
+              <Text style={styles.note}>{t('publicDescriptionNote')}</Text>
+              <TextInput
+                value={about}
+                onChangeText={setAbout}
+                multiline
+                editable={!savingAbout}
+                maxLength={MAX_PARTNER_ABOUT_CHARS}
+                placeholder={t('publicDescriptionPlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                style={styles.aboutInput}
+                textAlignVertical="top"
+              />
+              <Text style={styles.counter}>
+                {about.trim().length} / {MAX_PARTNER_ABOUT_CHARS}
+              </Text>
+              <Button
+                title={t('saveDescription')}
+                variant="secondary"
+                size="md"
+                onPress={() => void saveAbout()}
+                disabled={savingAbout || !aboutDirty}
+                loading={savingAbout}
+              />
             </View>
 
             {/* Leaving the workspace is deliberate and explicit. This is plain
@@ -225,6 +309,18 @@ const useStyles = makeStyles((t) => ({
   },
   logoImage: { width: '100%', height: '100%' },
   logoActions: { flex: 1, minWidth: 0, gap: t.spacing.sm },
+  aboutInput: {
+    minHeight: 120,
+    marginTop: t.spacing.sm,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.md,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceAlt,
+    color: t.colors.text,
+    ...t.typography.body,
+  },
+  counter: { ...t.typography.tiny, color: t.colors.textMuted, textAlign: 'right' },
   name: { ...t.typography.bodyBold, color: t.colors.text },
   meta: { ...t.typography.body, color: t.colors.textSecondary },
   switchButton: { marginTop: t.spacing.sm },

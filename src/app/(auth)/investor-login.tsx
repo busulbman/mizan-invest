@@ -5,8 +5,13 @@
  *
  * Email + password form with social sign-in shortcuts.
  *
- * DEMO ONLY — there is no authentication backend. Any submission goes
- * straight to the investor home, which is what the walkthrough needs.
+ * CONFIRMATION IS A STATE, NOT AN ALERT
+ * Signing up used to end at a dismissible Alert saying "check your email". That
+ * over-claimed: `needsEmailConfirmation` only means Supabase returned no
+ * session, i.e. that confirmation is REQUIRED — it is not evidence that any
+ * email was delivered, and the user was left with no way to recover a message
+ * that never arrived. Signup now lands on a pending panel that says what was
+ * actually requested and offers a new link.
  *
  * KEYBOARD HANDLING
  * The form lives inside a KeyboardAvoidingView + ScrollView with
@@ -15,10 +20,9 @@
  * tap on the submit button only dismisses the keyboard instead of
  * pressing it.
  *
- * TODO: Connect real authentication and validation
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -40,11 +44,14 @@ import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 import { goBackOrHome, landingRouteForRole } from '@/lib/navigation';
 
+/** Matches the server-side throttle closely enough to keep the UI honest. */
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export default function InvestorLoginScreen() {
   const styles = useStyles();
   const { colors, isDark } = useTheme();
   const { t } = useLanguage();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resendConfirmation } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
@@ -53,6 +60,23 @@ export default function InvestorLoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [focused, setFocused] = useState<'name' | 'email' | 'password' | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * Set once signup succeeds and confirmation is required. While it holds an
+   * address the form is replaced by the pending panel, so the user cannot
+   * silently lose the fact that an unconfirmed account now exists.
+   */
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Confirmation sends are throttled server-side. The countdown makes that
+  // visible instead of letting the user hammer a button into a 429.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((value) => (value <= 1 ? 0 : value - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return;
@@ -70,7 +94,11 @@ export default function InvestorLoginScreen() {
     }
 
     if ('needsEmailConfirmation' in result && result.needsEmailConfirmation) {
-      Alert.alert(t('success'), t('checkYourEmail'));
+      // A pending state, not an alert: the account exists but is unusable until
+      // confirmed, and the user needs a way back to that fact.
+      setPendingEmail(email.trim());
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      setPassword('');
       return;
     }
 
@@ -79,6 +107,30 @@ export default function InvestorLoginScreen() {
     // still the pre-sign-in ones during this handler.
     router.replace(landingRouteForRole(result.identity));
   };
+
+  const handleResend = useCallback(async () => {
+    if (!pendingEmail || resending || cooldown > 0) return;
+    setResending(true);
+    const { error, rateLimited } = await resendConfirmation(pendingEmail);
+    setResending(false);
+    // Throttled or accepted, the next attempt waits either way.
+    setCooldown(RESEND_COOLDOWN_SECONDS);
+    if (rateLimited) {
+      Alert.alert(t('couldNotResend'), `${t('resendAvailableIn')} ${RESEND_COOLDOWN_SECONDS}s`);
+      return;
+    }
+    if (error) {
+      Alert.alert(t('couldNotResend'), error.message || t('pleaseTryAgain'));
+      return;
+    }
+    Alert.alert(t('confirmationResent'), t('confirmationDeliveryNote'));
+  }, [cooldown, pendingEmail, resendConfirmation, resending, t]);
+
+  const leavePending = useCallback(() => {
+    setPendingEmail(null);
+    setCooldown(0);
+    setIsSignUp(false);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -120,10 +172,49 @@ export default function InvestorLoginScreen() {
                 {t('welcomeBack')}
               </Text>
               <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
-                {isSignUp ? t('createAccount') : t('signInSubtitle')}
+                {pendingEmail ? t('confirmYourEmail') : isSignUp ? t('createAccount') : t('signInSubtitle')}
               </Text>
             </Animated.View>
 
+            {pendingEmail ? (
+              <Animated.View entering={FadeInUp.delay(200).duration(500)} style={styles.form}>
+                <View style={styles.pendingCard}>
+                  <AppIcon name="email" size="lg" color={colors.accent} />
+                  <Text style={styles.pendingTitle}>{t('confirmYourEmail')}</Text>
+                  <Text style={styles.pendingLabel}>{t('confirmationRequestedFor')}</Text>
+                  <Text style={styles.pendingEmail} numberOfLines={2}>
+                    {pendingEmail}
+                  </Text>
+                  {/* Deliberately does not promise delivery — nothing the client
+                      can see proves the message left Supabase. */}
+                  <Text style={styles.pendingNote}>{t('confirmationDeliveryNote')}</Text>
+                </View>
+
+                <Button
+                  title={
+                    cooldown > 0
+                      ? `${t('resendAvailableIn')} ${cooldown}s`
+                      : t('resendConfirmation')
+                  }
+                  onPress={() => void handleResend()}
+                  variant="gold"
+                  size="lg"
+                  loading={resending}
+                  disabled={resending || cooldown > 0}
+                  style={styles.submit}
+                />
+
+                <Pressable
+                  onPress={leavePending}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.authSwitch, pressed && styles.pressed]}
+                >
+                  <Text style={styles.authSwitchText} numberOfLines={1}>
+                    {t('backToSignIn')}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            ) : (
             <Animated.View entering={FadeInUp.delay(280).duration(500)} style={styles.form}>
               {isSignUp && (
                 <View style={styles.field}>
@@ -218,6 +309,7 @@ export default function InvestorLoginScreen() {
                 </Text>
               </Pressable>
             </Animated.View>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>
@@ -317,6 +409,26 @@ const useStyles = makeStyles((t) => ({
   authSwitchText: {
     ...t.typography.captionBold,
     color: t.colors.accent,
+  },
+
+  pendingCard: {
+    alignItems: 'center',
+    gap: 8,
+    padding: t.spacing.lg,
+    borderRadius: t.borderRadius.xl,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
+  },
+  pendingTitle: { ...t.typography.h3, color: t.colors.text, textAlign: 'center' },
+  pendingLabel: { ...t.typography.caption, color: t.colors.textSecondary, textAlign: 'center' },
+  pendingEmail: { ...t.typography.bodyBold, color: t.colors.accent, textAlign: 'center' },
+  pendingNote: {
+    ...t.typography.tiny,
+    color: t.colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 4,
   },
 
   divider: {

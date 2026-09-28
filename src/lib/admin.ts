@@ -44,6 +44,15 @@ async function count(
  *
  * `head: true` with an exact count means the rows are never transferred — only
  * the count — so this stays cheap as the tables grow.
+ *
+ * WHY `select('id')` AND NOT `select('*')`
+ * Migration 20260928100000 replaced the table-wide SELECT grant on `properties`
+ * with an explicit column list that omits latitude/longitude, so that raw
+ * coordinates cannot be read, filtered or sorted through REST. PostgREST turns
+ * `select('*')` into a real `SELECT *`, which now touches two columns no client
+ * role holds a privilege on — it would fail on privilege even though only a
+ * count is wanted. Naming one granted column keeps every count working and is
+ * cheaper besides.
  */
 export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
   const [
@@ -57,32 +66,32 @@ export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
     count(
       supabase
         .from('properties')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('publication_status', 'pending_review')
         .is('deleted_at', null)
     ),
     count(
       supabase
         .from('properties')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('publication_status', 'published')
         .is('deleted_at', null)
     ),
     count(
       supabase
         .from('partners')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('is_active', true)
         .is('deleted_at', null)
     ),
     count(
       supabase
         .from('partner_applications')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'pending')
     ),
-    count(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'new')),
-    count(supabase.from('leads').select('*', { count: 'exact', head: true })),
+    count(supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new')),
+    count(supabase.from('leads').select('id', { count: 'exact', head: true })),
   ]);
 
   return {
