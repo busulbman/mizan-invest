@@ -59,15 +59,53 @@ async function signIn(email, password) {
 
 // ---------------------------------------------------------------------------
 console.log('\n=== A. anon must NOT reach raw properties.latitude / longitude ===');
-// A 403 is the proof. A 200 means the column is still served and the whole
-// migration is moot, whatever the response body happens to contain today.
+/**
+ * WHAT COUNTS AS PROOF HERE
+ *
+ * The assertion is PostgreSQL's SQLSTATE, not the HTTP status. PostgREST maps
+ * 42501 (insufficient_privilege) to "403 if authenticated, else 401" — these
+ * probes are anonymous, so the correct answer is 401, and an earlier version of
+ * this script wrongly demanded exactly 403 and reported FAIL on a migration
+ * that had in fact applied perfectly.
+ *
+ * 42501 is also what distinguishes privilege denial from an authentication
+ * problem, which is the other thing a bare 401 could mean: a bad or missing
+ * apikey returns {"message":"Invalid API key"} with NO `code` field at all.
+ * So a 401 carrying code 42501 is a privilege refusal; a 401 without it is an
+ * auth failure and must NOT be mistaken for a pass.
+ */
+const DENIED_STATUSES = [401, 403];
 for (const [name, path] of [
   ['1 direct SELECT latitude,longitude', '/properties?select=id,latitude,longitude&limit=3'],
   ['2 FILTER on latitude (binary-searchable)', '/properties?select=id&latitude=gt.-91&limit=3'],
   ['3 ORDER BY longitude', '/properties?select=id&order=longitude.asc&limit=3'],
 ]) {
   const r = await rest(path);
-  r.status === 403 ? ok(name, 'HTTP 403') : no(name, `HTTP ${r.status} — column still reachable`);
+  const body = await r.json().catch(() => null);
+  const code = body && typeof body === 'object' ? body.code : undefined;
+
+  if (r.status === 200) {
+    no(name, 'HTTP 200 — column still reachable');
+  } else if (code === '42501' && DENIED_STATUSES.includes(r.status)) {
+    ok(name, `HTTP ${r.status} SQLSTATE 42501 — privilege denied`);
+  } else if (DENIED_STATUSES.includes(r.status)) {
+    // Refused, but for the wrong reason — most likely a key problem, which
+    // would make every other check meaningless too.
+    no(name, `HTTP ${r.status} but no SQLSTATE 42501 (auth problem, not privilege): ${body?.message ?? '?'}`);
+  } else {
+    no(name, `unexpected HTTP ${r.status}: ${body?.message ?? '?'}`);
+  }
+}
+
+// The control that separates "these two columns are denied" from "the whole
+// table is denied". PostgreSQL phrases a COLUMN privilege failure as
+// "permission denied for table properties", so without this the section above
+// would read identically if the re-GRANT had silently not applied.
+{
+  const r = await rest('/properties?select=id,reference_code,location_precision&limit=1');
+  r.ok
+    ? ok('3b control: granted columns still readable', 'denial is column-scoped, not table-wide')
+    : no('3b control: granted columns still readable', `HTTP ${r.status} — the re-GRANT did not apply`);
 }
 
 console.log('\n=== B. anon must still read everything legitimate ===');

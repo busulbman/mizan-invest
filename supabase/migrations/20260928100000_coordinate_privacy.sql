@@ -142,17 +142,28 @@ grant select (
 --   so the injection surface is zero by construction.
 create or replace function public.property_location(p_property_id uuid)
 returns table (
-  property_id       uuid,
-  precision         public.location_precision,
+  property_id        uuid,
+  -- NOT named `precision`. PRECISION is a col_name_keyword in PostgreSQL, and
+  -- a RETURNS TABLE column is parsed as a param_name, whose grammar production
+  -- (type_function_name) admits IDENT, unreserved_keyword and
+  -- type_func_name_keyword but NOT col_name_keyword. It is therefore legal as a
+  -- table column name and illegal here - which is why `precision` parses fine
+  -- on properties.location_precision but fails with "syntax error at or near
+  -- precision" in this position. Keep this name a plain identifier.
+  --
+  -- Every reference to it in the body below is qualified (`v_row.`/`p.`), so it
+  -- never collides with the same-named column under plpgsql variable
+  -- resolution.
+  location_precision public.location_precision,
   -- 'exact' - a real point, safe to pin
   -- 'area'  - a generalised cell centre, must be drawn as an area
   -- 'city'  - no property point at all, city centroid only
-  display_kind      text,
-  display_latitude  numeric,
-  display_longitude numeric,
-  radius_m          integer,
-  city_latitude     numeric,
-  city_longitude    numeric
+  display_kind       text,
+  display_latitude   numeric,
+  display_longitude  numeric,
+  radius_m           integer,
+  city_latitude      numeric,
+  city_longitude     numeric
 )
 language plpgsql
 stable
