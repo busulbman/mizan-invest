@@ -7,7 +7,7 @@
  */
 
 import { Pressable, Text, View } from 'react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Badge } from '@/components/ui/Badge';
@@ -15,6 +15,8 @@ import { RemoteImage } from '@/components/ui/RemoteImage';
 import { VideoModal } from '@/components/media/VideoModal';
 import { propertyTypeKey } from '@/constants/localizedData';
 import { formatListingPrice, RemoteProperty } from '@/lib/properties';
+import { getPropertyLocation, type PropertyLocation } from '@/lib/propertyLocation';
+import { LocationMap } from '@/components/map';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 import type { IconName } from '@/constants/icons';
@@ -280,24 +282,61 @@ export function RemoteVideoSection({ property }: { property: RemoteProperty }) {
   );
 }
 
+/**
+ * Investor-facing location.
+ *
+ * WHERE THE DATA COMES FROM
+ * `property_location()` and nothing else. `latitude`/`longitude` are not in
+ * PROPERTY_SELECT and must never be added to it — they are not granted to any
+ * client role, so the query would fail outright, and the whole point is that an
+ * investor's device never receives the exact point of an approximate listing.
+ * There is therefore nothing here to leak: the privacy decision was made by the
+ * database before the response was sent.
+ *
+ * WHAT REPLACED WHAT
+ * This used to render the property's own COVER PHOTO with a pin icon drawn on
+ * top of it — a picture pretending to be a map, showing a pin that corresponded
+ * to no coordinate at all. That is now a real map of the location the server
+ * permitted.
+ */
 export function RemoteLocationSection({ property }: { property: RemoteProperty }) {
   const styles = useStyles();
-  const { colors } = useTheme();
   const { t } = useLanguage();
+
+  const [location, setLocation] = useState<PropertyLocation | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getPropertyLocation(property.id)
+      .then((next) => {
+        if (active) setLocation(next);
+      })
+      // A location that cannot be read degrades to the city/country text below.
+      // It must never take down the rest of the detail screen.
+      .catch((error) => console.warn('[property-detail] Location unavailable.', error));
+    return () => {
+      active = false;
+    };
+  }, [property.id]);
+
+  const placeLabel = `${property.city.name}, ${property.country.name}`;
+  // Keyed off displayKind — what this caller actually received — never off
+  // `precision`, which describes intent rather than the data in hand.
+  const note =
+    location?.displayKind === 'exact'
+      ? t('locationExactNote')
+      : location?.displayKind === 'area'
+        ? t('locationApproximateNote')
+        : t('locationCityOnlyNote');
 
   return (
     <Section title={t('locationMap')}>
-      <View style={styles.mapCard}>
-        <RemoteImage uri={property.image} style={styles.mapImage} />
-        <View style={styles.mapScrim} />
-        <View style={styles.mapPin}>
-          <AppIcon name="locationFilled" size="md" color={colors.error} />
+      {location?.displayKind === 'area' ? (
+        <View style={styles.approxBadge}>
+          <Text style={styles.approxBadgeText}>{t('approximateAreaBadge')}</Text>
         </View>
-        <View style={styles.mapLabel}>
-          <AppIcon name="location" size="xs" color={colors.onDark} />
-          <Text style={styles.mapLabelText} numberOfLines={1}>{property.city.name}, {property.country.name}</Text>
-        </View>
-      </View>
+      ) : null}
+      <LocationMap location={location} placeLabel={placeLabel} note={note} />
       <View style={styles.detailRow}>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>{t('city')}</Text>
@@ -404,6 +443,17 @@ const useStyles = makeStyles((t) => ({
   videoPlay: { position: 'absolute', top: '50%', left: '50%', width: 60, height: 60, marginTop: -30, marginLeft: -30, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accent },
   videoFooter: { position: 'absolute', left: t.spacing.smd, right: t.spacing.smd, bottom: t.spacing.smd, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.sm },
   videoLabel: { flexShrink: 1, ...t.typography.captionBold, color: t.colors.onDark },
+  approxBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: t.borderRadius.full,
+    borderWidth: 1,
+    borderColor: t.colors.accent,
+    backgroundColor: t.colors.surfaceAlt,
+    marginBottom: 8,
+  },
+  approxBadgeText: { ...t.typography.tiny, fontWeight: '700', color: t.colors.accent },
   mapCard: { height: 170, borderRadius: t.borderRadius.xl, overflow: 'hidden', backgroundColor: t.colors.surfaceAlt },
   mapImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   mapScrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8, 13, 24, 0.35)' },

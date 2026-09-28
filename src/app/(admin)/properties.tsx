@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LocationMap } from '@/components/map';
 import { AppIcon, Button, PromptSheet } from '@/components/ui';
 import type { TranslationKey } from '@/constants/translations';
 import { useLanguage } from '@/context/LanguageContext';
@@ -36,6 +37,7 @@ import {
   type PartnerPropertySummary,
 } from '@/lib/partner';
 import { TYPE_LABEL_KEYS } from '@/lib/propertyFields';
+import { getPropertyLocation, type PropertyLocation } from '@/lib/propertyLocation';
 import { getPropertyMedia, type PropertyMediaItem } from '@/lib/propertyMedia';
 
 const TABS: Array<{ key: string; labelKey: TranslationKey; status?: PartnerPropertyStatus }> = [
@@ -65,6 +67,15 @@ export default function AdminPropertiesScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  /**
+   * Submitted locations, read through property_location().
+   *
+   * An admin is a privileged caller, so the RPC returns the RAW stored point for
+   * exact AND approximate listings — generalising it for a reviewer would make
+   * the review meaningless. Direct SELECT of latitude/longitude is refused even
+   * for an admin, so this RPC is the only way to see it.
+   */
+  const [locations, setLocations] = useState<Record<string, PropertyLocation | null>>({});
   const [media, setMedia] = useState<Record<string, PropertyMediaItem[]>>({});
   const [mediaLoading, setMediaLoading] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<PartnerPropertySummary | null>(null);
@@ -108,6 +119,16 @@ export default function AdminPropertiesScreen() {
     try {
       const rows = await getPropertyMedia(id);
       setMedia((current) => ({ ...current, [id]: rows }));
+
+      // Fetched alongside the media, and failing softly: a location the RPC
+      // cannot return must not block the admin from reviewing the photos.
+      try {
+        const location = await getPropertyLocation(id);
+        setLocations((current) => ({ ...current, [id]: location }));
+      } catch (error) {
+        console.warn('[admin-review] Location unavailable.', error);
+        setLocations((current) => ({ ...current, [id]: null }));
+      }
     } catch (error) {
       Alert.alert(t('couldNotLoadMedia'), error instanceof Error ? error.message : t('pleaseTryAgain'));
     } finally {
@@ -172,6 +193,9 @@ export default function AdminPropertiesScreen() {
                     <Text style={styles.warn}>{t('noMediaUploaded')}</Text>
                   ) : (
                     <>
+                      <Text style={styles.mediaGroup}>{t('submittedLocation')}</Text>
+                      <AdminLocationBlock location={locations[item.id] ?? null} cityName={item.cityName} />
+
                       <Text style={styles.mediaCount}>
                         {photos.length} {t('photosLabel')} · {videos.length} {t('videosLabel')} · {reels.length}{' '}
                         {t('reelsLabel')}
@@ -282,6 +306,60 @@ export default function AdminPropertiesScreen() {
   );
 }
 
+/**
+ * The location as SUBMITTED, for review.
+ *
+ * The admin is a privileged caller of property_location(), so for both `exact`
+ * and `approximate` the RPC returns the partner's REAL point — displayKind is
+ * 'exact' in both cases. That is deliberate: a reviewer approving a listing has
+ * to see the location being claimed, and a generalised circle would hide
+ * precisely the thing under review. The generalisation happens only when an
+ * investor asks.
+ *
+ * The numeric coordinates are printed alongside the map because an admin
+ * sometimes needs to check them against a document rather than eyeball a pin.
+ *
+ * city_only shows the city and says plainly that no point was submitted, rather
+ * than inventing one from the centroid and implying the partner supplied it.
+ */
+function AdminLocationBlock({
+  location,
+  cityName,
+}: {
+  location: PropertyLocation | null;
+  cityName: string;
+}) {
+  const styles = useStyles();
+  const { t } = useLanguage();
+
+  const point = location?.displayKind === 'exact' ? location.display : null;
+
+  return (
+    <View style={styles.locationBlock}>
+      <LocationMap
+        location={location}
+        placeLabel={cityName}
+        note={location ? t(PRECISION_NOTE_KEYS[location.precision]) : undefined}
+        height={160}
+      />
+      {point ? (
+        <Text style={styles.coords} selectable>
+          {t('coordinatesLabel')}: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+        </Text>
+      ) : (
+        <Text style={styles.warn}>{t('noCoordinatesSubmitted')}</Text>
+      )}
+    </View>
+  );
+}
+
+/** Reviewer-facing description of what the partner chose. */
+const PRECISION_NOTE_KEYS: Record<PropertyLocation['precision'], TranslationKey> = {
+  exact: 'precisionExactHelp',
+  approximate: 'precisionApproximateHelp',
+  city_only: 'precisionCityOnlyHelp',
+};
+
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.background },
   content: { paddingHorizontal: t.spacing.screenHorizontal, gap: t.spacing.md },
@@ -317,6 +395,8 @@ const useStyles = makeStyles((t) => ({
   thumb: { width: 92, height: 92, borderRadius: t.borderRadius.md, backgroundColor: t.colors.surfaceAlt },
   thumbFallback: { alignItems: 'center', justifyContent: 'center' },
   reelThumb: { borderWidth: 1, borderColor: t.colors.accent },
+  locationBlock: { gap: 6, marginTop: 4, marginBottom: 6 },
+  coords: { ...t.typography.tiny, color: t.colors.textSecondary },
   mediaGroup: { ...t.typography.tiny, color: t.colors.textSecondary, marginTop: 4, fontWeight: '700' },
   warn: { ...t.typography.caption, color: t.colors.warning },
   reject: { ...t.typography.caption, color: t.colors.error },

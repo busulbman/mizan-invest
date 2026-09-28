@@ -34,7 +34,16 @@ import type { TranslationKey } from '@/constants/translations';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 import { displayNumeric, parseNumericInput, toNumber } from '@/lib/numberInput';
+import { MapPointPicker } from '@/components/map';
 import { CONTACT_INFO_ERROR, type CreatePartnerPropertyInput, type PartnerPlace } from '@/lib/partner';
+import {
+  LOCATION_PRECISIONS,
+  regionFor,
+  ZOOM_CITY,
+  ZOOM_POINT,
+  type LatLng,
+  type LocationPrecision,
+} from '@/lib/propertyLocation';
 import {
   CURRENCIES,
   clearHiddenFields,
@@ -71,6 +80,10 @@ export interface PropertyFormValues {
   hasSeaView: boolean;
   hasCityView: boolean;
   highlights: string[];
+  /** How precisely investors may be shown this location. */
+  locationPrecision: LocationPrecision;
+  /** The REAL point. Null until the partner places one, and for city_only. */
+  point: LatLng | null;
 }
 
 export function emptyPropertyForm(): PropertyFormValues {
@@ -94,6 +107,10 @@ export function emptyPropertyForm(): PropertyFormValues {
     hasSeaView: false,
     hasCityView: false,
     highlights: [],
+    // Matches the column default. The safer of the two map-bearing options:
+    // a partner who never touches this setting does not publish an exact point.
+    locationPrecision: 'approximate',
+    point: null,
   };
 }
 
@@ -114,6 +131,11 @@ export function missingForSubmit(values: PropertyFormValues): TranslationKey[] {
 
   const area = toNumber(values.area);
   if (area === null || area <= 0) missing.push(profileFor(values.propertyType).areaLabelKey);
+
+  // A listing that claims an exact or approximate location must actually carry
+  // a point: an admin cannot review a precision claim backed by nothing. A
+  // city_only listing needs no pin at all — the city IS the location.
+  if (values.locationPrecision !== 'city_only' && !values.point) missing.push('propertyPoint');
 
   return missing;
 }
@@ -157,6 +179,11 @@ export function toPropertyInput(
     hasPool: normalised.hasPool,
     hasSecurity: normalised.hasSecurity,
     hasGarden: normalised.hasGarden,
+    locationPrecision: normalised.locationPrecision,
+    // city_only is normalised to NULL in the data layer too; sending it here
+    // keeps the form's intent explicit rather than relying on that alone.
+    latitude: normalised.locationPrecision === 'city_only' ? null : normalised.point?.latitude ?? null,
+    longitude: normalised.locationPrecision === 'city_only' ? null : normalised.point?.longitude ?? null,
     hasSeaView: normalised.hasSeaView,
     hasCityView: normalised.hasCityView,
     yearBuilt: year,
@@ -181,7 +208,20 @@ export function describeSaveError(error: unknown, t: (key: TranslationKey) => st
   return error instanceof Error ? error.message : t('pleaseTryAgain');
 }
 
-export type SheetKind = 'country' | 'city' | 'type' | 'currency' | 'listing' | null;
+export type SheetKind = 'country' | 'city' | 'type' | 'currency' | 'listing' | 'precision' | null;
+
+/** User-facing labels. The enum names never reach the screen. */
+export const PRECISION_LABEL_KEYS: Record<LocationPrecision, TranslationKey> = {
+  exact: 'precisionExact',
+  approximate: 'precisionApproximate',
+  city_only: 'precisionCityOnly',
+};
+
+export const PRECISION_HELP_KEYS: Record<LocationPrecision, TranslationKey> = {
+  exact: 'precisionExactHelp',
+  approximate: 'precisionApproximateHelp',
+  city_only: 'precisionCityOnlyHelp',
+};
 
 export interface PropertyFormProps {
   values: PropertyFormValues;
@@ -221,10 +261,58 @@ export function PropertyForm({
     onSheetChange(null);
   };
 
+  /**
+   * Changing the city DROPS the pin.
+   *
+   * A pin belongs to the city it was placed in. Keeping it would leave a
+   * listing labelled Jeddah with a point in Riyadh — and because the map opens
+   * on the pin, the partner would likely never scroll far enough to notice. The
+   * cost of clearing is one extra tap; the cost of keeping is a wrong location
+   * that looks deliberate.
+   */
+  const selectCity = (cityId: string) => {
+    const cityChanged = cityId !== values.cityId;
+    onChange({ ...values, cityId, point: cityChanged ? null : values.point });
+    onSheetChange(null);
+  };
+
+  /** Changing country invalidates the city, and therefore the pin too. */
+  const selectCountry = (countryId: string) => {
+    onChange({ ...values, countryId, cityId: '', point: null });
+    onCountrySelected(countryId);
+    onSheetChange(null);
+  };
+
+  /**
+   * Switching to city_only DISCARDS the stored point.
+   *
+   * The partner is saying this location should not be pinpointed. Retaining a
+   * precise coordinate "just in case" would keep data we have promised not to
+   * use, and the data layer writes NULL for city_only regardless — so holding
+   * it in the form would only mislead the partner about what is saved.
+   */
+  const selectPrecision = (locationPrecision: LocationPrecision) => {
+    const dropPin = locationPrecision === 'city_only';
+    onChange({ ...values, locationPrecision, point: dropPin ? null : values.point });
+    onSheetChange(null);
+  };
+
   const shows = (field: Parameters<typeof showsField>[1]) => showsField(values.propertyType, field);
 
   const countryLabel = countries.find((item) => item.id === values.countryId)?.name ?? t('selectCountry');
-  const cityLabel = cities.find((item) => item.id === values.cityId)?.name ?? t('selectCity');
+  const selectedCity = cities.find((item) => item.id === values.cityId);
+  const cityLabel = selectedCity?.name ?? t('selectCity');
+
+  /**
+   * Where the picker opens: the existing pin when editing, otherwise the city
+   * centroid. Null when neither exists — a city seeded without a centroid — and
+   * the picker renders a prompt instead of a map rather than inventing a place.
+   */
+  const pickerRegion = values.point
+    ? regionFor(values.point, ZOOM_POINT)
+    : selectedCity?.center
+      ? regionFor(selectedCity.center, ZOOM_CITY)
+      : null;
 
   return (
     <View style={styles.form}>
@@ -260,6 +348,30 @@ export function PropertyForm({
         onPress={() => onSheetChange('city')}
         disabled={!editable || !values.countryId}
       />
+
+      <Picker
+        label={t('locationVisibility')}
+        value={t(PRECISION_LABEL_KEYS[values.locationPrecision])}
+        onPress={() => onSheetChange('precision')}
+        disabled={!editable}
+      />
+      <Text style={styles.help}>{t(PRECISION_HELP_KEYS[values.locationPrecision])}</Text>
+
+      {/* city_only needs no pin, so no picker is shown at all — offering one
+          would invite a point this listing has promised not to keep. */}
+      {values.locationPrecision !== 'city_only' ? (
+        <>
+          {values.locationPrecision === 'approximate' ? (
+            <Text style={styles.privacyNotice}>{t('approximatePrivacyNotice')}</Text>
+          ) : null}
+          <MapPointPicker
+            value={values.point}
+            onChange={(point) => patch({ point })}
+            region={pickerRegion}
+            editable={editable}
+          />
+        </>
+      ) : null}
 
       {/* ---------------- Pricing ---------------- */}
       <Text style={styles.section}>{t('pricingSection')}</Text>
@@ -440,11 +552,7 @@ export function PropertyForm({
             key={item.id}
             label={item.name}
             active={item.id === values.countryId}
-            onPress={() => {
-              onChange({ ...values, countryId: item.id, cityId: '' });
-              onSheetChange(null);
-              onCountrySelected(item.id);
-            }}
+            onPress={() => selectCountry(item.id)}
           />
         ))}
       </BottomSheet>
@@ -455,10 +563,22 @@ export function PropertyForm({
             key={item.id}
             label={item.name}
             active={item.id === values.cityId}
-            onPress={() => {
-              patch({ cityId: item.id });
-              onSheetChange(null);
-            }}
+            onPress={() => selectCity(item.id)}
+          />
+        ))}
+      </BottomSheet>
+
+      <BottomSheet
+        visible={sheet === 'precision'}
+        onClose={() => onSheetChange(null)}
+        title={t('locationVisibility')}
+      >
+        {LOCATION_PRECISIONS.map((item) => (
+          <SheetOption
+            key={item}
+            label={t(PRECISION_LABEL_KEYS[item])}
+            active={item === values.locationPrecision}
+            onPress={() => selectPrecision(item)}
           />
         ))}
       </BottomSheet>
@@ -601,6 +721,17 @@ const useStyles = makeStyles((t) => ({
     ...t.typography.body,
   },
   multiline: { minHeight: 100, paddingTop: 12, textAlignVertical: 'top' },
+  help: { ...t.typography.tiny, color: t.colors.textMuted, lineHeight: 16, marginTop: -4 },
+  privacyNotice: {
+    ...t.typography.tiny,
+    color: t.colors.text,
+    lineHeight: 16,
+    padding: t.spacing.sm,
+    borderRadius: t.borderRadius.md,
+    borderWidth: 1,
+    borderColor: t.colors.accent,
+    backgroundColor: t.colors.surfaceAlt,
+  },
   select: {
     minHeight: 54,
     paddingHorizontal: t.spacing.md,

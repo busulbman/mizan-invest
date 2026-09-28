@@ -5,6 +5,7 @@
  * limited to a partner's own draft and its English translation; RLS and the
  * database trigger enforce that boundary independently of this client code.
  */
+import { getPropertyLocation, type LatLng, type LocationPrecision } from '@/lib/propertyLocation';
 import { supabase } from '@/lib/supabase';
 
 export type PartnerApplicationStatus = 'pending' | 'approved' | 'rejected';
@@ -46,6 +47,12 @@ export interface PartnerPlace {
   name: string;
   countryId?: string;
   countryCode?: string;
+  /**
+   * City centroid, used only to open the map picker somewhere sensible.
+   * Public knowledge and nullable — a city may be seeded without one, which the
+   * picker must survive rather than crash on.
+   */
+  center?: LatLng | null;
 }
 
 export interface PartnerPropertySummary {
@@ -97,6 +104,14 @@ export interface CreatePartnerPropertyInput {
   hasSeaView?: boolean;
   hasCityView?: boolean;
   yearBuilt?: number | null;
+  /**
+   * How precisely this location may be shown. The database generalises
+   * 'approximate' for investors; the app always stores the REAL point.
+   */
+  locationPrecision: LocationPrecision;
+  /** The true point. Null for city_only, and null on an unfinished draft. */
+  latitude?: number | null;
+  longitude?: number | null;
   title: string;
   description?: string;
   /**
@@ -237,13 +252,21 @@ export async function getCountriesForPartnerForm(): Promise<PartnerPlace[]> {
 export async function getCitiesForPartnerForm(countryId: string): Promise<PartnerPlace[]> {
   const { data, error } = await supabase
     .from('cities')
-    .select('id, country_id, city_translations!inner(language, name)')
+    .select('id, country_id, latitude, longitude, city_translations!inner(language, name)')
     .eq('country_id', countryId)
     .eq('city_translations.language', 'en')
     .eq('is_active', true)
     .order('slug');
   fail(error, 'getCitiesForPartnerForm');
-  return (data ?? []).map((row) => ({ id: row.id, name: row.city_translations?.[0]?.name ?? row.id, countryId: row.country_id }));
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.city_translations?.[0]?.name ?? row.id,
+    countryId: row.country_id,
+    // Both columns are NOT NULL together by constraint, so one check covers it.
+    center: row.latitude === null || row.longitude === null
+      ? null
+      : { latitude: Number(row.latitude), longitude: Number(row.longitude) },
+  }));
 }
 
 export async function getPartnerProperties(partnerId: string, status?: PartnerPropertyStatus): Promise<PartnerPropertySummary[]> {
@@ -351,6 +374,48 @@ export async function getPartnerPropertyCounts(partnerId: string): Promise<Partn
   return counts;
 }
 
+/**
+ * The three location columns, normalised.
+ *
+ * WRITES ARE STILL ALLOWED. The coordinate-privacy migration revoked SELECT on
+ * latitude/longitude, not INSERT or UPDATE — the partner supplies the point and
+ * the database decides who may read it back.
+ *
+ * city_only always writes NULL coordinates. A listing whose location is "the
+ * city" must not keep a precise point lying around in the row: the safest place
+ * for data you have promised not to show is nowhere. `prop_coords_together`
+ * also requires both columns to be null or both set, so they always move as a
+ * pair.
+ */
+function locationColumns(input: {
+  locationPrecision: LocationPrecision;
+  latitude?: number | null;
+  longitude?: number | null;
+}): { location_precision: LocationPrecision; latitude: number | null; longitude: number | null } {
+  const cityOnly = input.locationPrecision === 'city_only';
+  const lat = cityOnly ? null : input.latitude ?? null;
+  const lng = cityOnly ? null : input.longitude ?? null;
+  const paired = lat === null || lng === null ? { latitude: null, longitude: null } : { latitude: lat, longitude: lng };
+  return { location_precision: input.locationPrecision, ...paired };
+}
+
+/**
+ * Whether this listing may be submitted for review, location-wise.
+ *
+ * A DRAFT may be incomplete — that is what a draft is for. Submission is the
+ * point at which 'exact' and 'approximate' must actually have a point, because
+ * an admin cannot review a listing that claims a precise location and provides
+ * none.
+ */
+export function locationReadyForSubmit(input: {
+  locationPrecision: LocationPrecision;
+  latitude?: number | null;
+  longitude?: number | null;
+}): boolean {
+  if (input.locationPrecision === 'city_only') return true;
+  return typeof input.latitude === 'number' && typeof input.longitude === 'number';
+}
+
 export async function createPartnerDraft(input: CreatePartnerPropertyInput): Promise<string> {
   const minorUnits = Math.round(input.price * 100);
   if (!Number.isFinite(minorUnits) || minorUnits <= 0) throw new Error('A valid positive price is required.');
@@ -375,6 +440,7 @@ export async function createPartnerDraft(input: CreatePartnerPropertyInput): Pro
       has_sea_view: input.hasSeaView ?? false,
       has_city_view: input.hasCityView ?? false,
       year_built: input.yearBuilt ?? null,
+      ...locationColumns(input),
     })
     .select('id')
     .single();
@@ -397,6 +463,13 @@ export async function createPartnerDraft(input: CreatePartnerPropertyInput): Pro
  *
  * RLS decides visibility: a partner sees only their own rows, so a mistyped or
  * foreign id returns nothing rather than leaking that the listing exists.
+ *
+ * COORDINATES COME FROM THE RPC, NOT THE SELECT
+ * `latitude`/`longitude` are not granted to any client role, so adding them to
+ * the select above would make this query fail with SQLSTATE 42501 — for the
+ * partner who OWNS the row, too. `property_location()` is the only read path,
+ * and it returns the raw point to an active member of the owning partner, which
+ * is exactly who is editing here.
  */
 export async function getPartnerPropertyDetail(propertyId: string): Promise<PartnerPropertyDetail | null> {
   const { data, error } = await supabase
@@ -406,7 +479,8 @@ export async function getPartnerPropertyDetail(propertyId: string): Promise<Part
     .select(
       `id, reference_code, partner_id, country_id, city_id, property_type, listing_status, publication_status,
        price_amount, price_currency, bedrooms, bathrooms, area_sqm, parking_spaces, has_pool, has_security,
-       has_garden, has_sea_view, has_city_view, year_built, rejection_reason, submitted_at, updated_at,
+       has_garden, has_sea_view, has_city_view, year_built, location_precision, rejection_reason,
+       submitted_at, updated_at,
        property_translations ( language, title, description, highlights )`
     )
     .eq('id', propertyId)
@@ -418,6 +492,17 @@ export async function getPartnerPropertyDetail(propertyId: string): Promise<Part
   const english = (data.property_translations ?? []).find(
     (row: { language: string }) => row.language === 'en'
   );
+
+  // A privileged caller, so displayKind 'exact' carries the true stored point.
+  // A failure here must not block editing the rest of the listing, so the form
+  // opens with no pin rather than refusing to load.
+  let point: LatLng | null = null;
+  try {
+    const location = await getPropertyLocation(propertyId);
+    point = location?.displayKind === 'exact' ? location.display : null;
+  } catch (error) {
+    console.warn('[getPartnerPropertyDetail] Location could not be read.', error);
+  }
 
   return {
     id: data.id,
@@ -444,6 +529,9 @@ export async function getPartnerPropertyDetail(propertyId: string): Promise<Part
     hasSeaView: Boolean(data.has_sea_view),
     hasCityView: Boolean(data.has_city_view),
     yearBuilt: data.year_built === null ? null : Number(data.year_built),
+    locationPrecision: (data.location_precision ?? 'approximate') as LocationPrecision,
+    latitude: point?.latitude ?? null,
+    longitude: point?.longitude ?? null,
     title: english?.title ?? '',
     description: english?.description ?? '',
     highlights: Array.isArray(english?.highlights) ? (english.highlights as string[]) : [],
@@ -484,6 +572,7 @@ export async function updatePartnerDraft(
       has_sea_view: input.hasSeaView ?? false,
       has_city_view: input.hasCityView ?? false,
       year_built: input.yearBuilt ?? null,
+      ...locationColumns(input),
     })
     .eq('id', propertyId);
   fail(propertyError, 'updatePartnerDraft');

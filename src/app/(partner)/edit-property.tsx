@@ -90,6 +90,13 @@ function formFromDetail(detail: PartnerPropertyDetail): PropertyFormValues {
     hasSeaView: Boolean(detail.hasSeaView),
     hasCityView: Boolean(detail.hasCityView),
     highlights: detail.highlights ?? [],
+    // Without these two the spread above would silently reset an edited listing
+    // to the default precision and drop its saved pin on the first save.
+    locationPrecision: detail.locationPrecision,
+    point:
+      typeof detail.latitude === 'number' && typeof detail.longitude === 'number'
+        ? { latitude: detail.latitude, longitude: detail.longitude }
+        : null,
   };
 }
 
