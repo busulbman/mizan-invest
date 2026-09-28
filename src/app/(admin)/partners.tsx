@@ -16,11 +16,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, IconButton, PromptSheet } from '@/components/ui';
+import { Button, PromptSheet } from '@/components/ui';
 import type { TranslationKey } from '@/constants/translations';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOr } from '@/lib/navigation';
 import { getAdminPartnerApplications, reviewPartnerApplication, type PartnerApplication } from '@/lib/partner';
 
 const APPLICANT_TYPE_LABELS: Record<string, TranslationKey> = {
@@ -81,17 +80,7 @@ export default function AdminPartnersScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 30 }]}>
-        <View style={styles.header}>
-          <IconButton
-            icon="back"
-            onPress={() => goBackOr('/(admin)/dashboard')}
-            accessibilityLabel={t('back')}
-            variant="surface"
-            size={40}
-          />
-          <Text style={styles.title}>{t('partnerApplications')}</Text>
-          <View style={styles.spacer} />
-        </View>
+        <Text style={styles.title}>{t('partnerApplications')}</Text>
 
         {loading ? (
           <ActivityIndicator color={colors.accent} style={styles.loader} />
@@ -164,9 +153,7 @@ export default function AdminPartnersScreen() {
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.background },
   content: { paddingHorizontal: t.spacing.screenHorizontal, gap: t.spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.smd },
-  title: { flex: 1, textAlign: 'center', ...t.typography.h3, color: t.colors.text },
-  spacer: { width: 40 },
+  title: { ...t.typography.h2, color: t.colors.text },
   loader: { marginTop: t.spacing.xl },
   empty: { ...t.typography.body, color: t.colors.textSecondary, textAlign: 'center', marginTop: t.spacing.xl },
   card: { gap: 7, padding: t.spacing.md, borderRadius: t.borderRadius.lg, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border },

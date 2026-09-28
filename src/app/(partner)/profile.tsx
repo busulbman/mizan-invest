@@ -19,13 +19,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppIcon, Button, IconButton } from '@/components/ui';
+import { AppIcon, Button } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOr } from '@/lib/navigation';
 import { pickSingleImage } from '@/lib/pickImage';
 import {
   getPartnerIdentity,
@@ -128,17 +128,7 @@ export default function PartnerProfileScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 30 }]}>
-        <View style={styles.header}>
-          <IconButton
-            icon="back"
-            onPress={() => goBackOr('/(partner)/dashboard')}
-            accessibilityLabel={t('back')}
-            variant="surface"
-            size={40}
-          />
-          <Text style={styles.title}>{t('partnerProfile')}</Text>
-          <View style={styles.spacer} />
-        </View>
+        <Text style={styles.title}>{t('partnerProfile')}</Text>
 
         {loading ? (
           <ActivityIndicator color={colors.accent} style={styles.loader} />
@@ -182,6 +172,23 @@ export default function PartnerProfileScreen() {
               </Text>
               <Text style={styles.meta}>{t('partnerProfileNote')}</Text>
             </View>
+
+            {/* Leaving the workspace is deliberate and explicit. This is plain
+                navigation into the customer app — there is no mode flag, no
+                persisted state and no change to what this account may do. The
+                way back is the Partner Portal row in investor Settings/Profile. */}
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>{t('viewAsInvestor')}</Text>
+              <Text style={styles.note}>{t('viewAsInvestorNote')}</Text>
+              <Button
+                title={t('viewAsInvestor')}
+                variant="secondary"
+                size="md"
+                icon="home"
+                onPress={() => router.push('/(main)/home')}
+                style={styles.switchButton}
+              />
+            </View>
           </>
         )}
       </ScrollView>
@@ -192,9 +199,7 @@ export default function PartnerProfileScreen() {
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.background },
   content: { paddingHorizontal: t.spacing.screenHorizontal, gap: t.spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.smd },
-  title: { flex: 1, textAlign: 'center', ...t.typography.h3, color: t.colors.text },
-  spacer: { width: 40 },
+  title: { ...t.typography.h2, color: t.colors.text },
   loader: { marginTop: t.spacing.xl },
   card: {
     padding: t.spacing.md,
@@ -222,4 +227,5 @@ const useStyles = makeStyles((t) => ({
   logoActions: { flex: 1, minWidth: 0, gap: t.spacing.sm },
   name: { ...t.typography.bodyBold, color: t.colors.text },
   meta: { ...t.typography.body, color: t.colors.textSecondary },
+  switchButton: { marginTop: t.spacing.sm },
 }));

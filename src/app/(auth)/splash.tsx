@@ -29,6 +29,7 @@ import Animated, {
 import { LogoMark } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { useLandingRoute } from '@/lib/navigation';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 const { height } = Dimensions.get('window');
@@ -38,6 +39,10 @@ export default function SplashScreen() {
   const { gradients, animation } = useTheme();
   const { t, isRTL } = useLanguage();
   const { isAuthenticated } = useAuth();
+  // Roles are already resolved here: the root layout holds every screen behind
+  // a placeholder until auth finishes loading, so this never reads a stale
+  // role and never flashes the wrong workspace.
+  const landing = useLandingRoute();
 
   const shimmer = useSharedValue(0);
 
@@ -49,11 +54,11 @@ export default function SplashScreen() {
     );
 
     const timer = setTimeout(() => {
-      router.replace(isAuthenticated ? '/(main)/home' : '/(auth)/onboarding');
+      router.replace(isAuthenticated ? landing : '/(auth)/onboarding');
     }, animation.splashDuration);
 
     return () => clearTimeout(timer);
-  }, [animation.splashDuration, isAuthenticated, shimmer]);
+  }, [animation.splashDuration, isAuthenticated, landing, shimmer]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     opacity: 0.25 + shimmer.value * 0.45,

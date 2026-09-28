@@ -11,6 +11,7 @@ import { AppIcon, Button } from '@/components/ui';
 import { MARKET_OPTIONS, MarketCode } from '@/constants/markets';
 import { useLanguage } from '@/context/LanguageContext';
 import { useMarket } from '@/context/MarketContext';
+import { useLandingRoute } from '@/lib/navigation';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 import { suggestMarketFromDevice } from '@/lib/marketLocation';
 
@@ -27,6 +28,7 @@ export default function MarketChoiceScreen() {
   const { colors, gradients } = useTheme();
   const { t } = useLanguage();
   const { setSelectedMarket } = useMarket();
+  const landing = useLandingRoute();
   const insets = useSafeAreaInsets();
   const [suggestedMarket, setSuggestedMarket] = useState<MarketCode | undefined>();
   const [detecting, setDetecting] = useState(false);
@@ -34,7 +36,9 @@ export default function MarketChoiceScreen() {
 
   const chooseMarket = (market: MarketCode) => {
     setSelectedMarket(market);
-    router.replace('/(main)/home');
+    // A guest lands on Home; an authenticated partner or admin who reaches the
+    // market screen still returns to their own workspace.
+    router.replace(landing);
   };
 
   const detectMarket = async () => {

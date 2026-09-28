@@ -25,17 +25,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppIcon, Button, IconButton, PromptSheet } from '@/components/ui';
+import { AppIcon, Button, PromptSheet } from '@/components/ui';
 import type { TranslationKey } from '@/constants/translations';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOr } from '@/lib/navigation';
 import {
   getAdminProperties,
   reviewProperty,
   type PartnerPropertyStatus,
   type PartnerPropertySummary,
 } from '@/lib/partner';
+import { TYPE_LABEL_KEYS } from '@/lib/propertyFields';
 import { getPropertyMedia, type PropertyMediaItem } from '@/lib/propertyMedia';
 
 const TABS: Array<{ key: string; labelKey: TranslationKey; status?: PartnerPropertyStatus }> = [
@@ -118,17 +118,7 @@ export default function AdminPropertiesScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 30 }]}>
-        <View style={styles.header}>
-          <IconButton
-            icon="back"
-            onPress={() => goBackOr('/(admin)/dashboard')}
-            accessibilityLabel={t('back')}
-            variant="surface"
-            size={40}
-          />
-          <Text style={styles.title}>{t('propertiesTitle')}</Text>
-          <View style={styles.spacer} />
-        </View>
+        <Text style={styles.title}>{t('propertiesTitle')}</Text>
 
         <View style={styles.tabs}>
           {TABS.map((tab) => (
@@ -162,9 +152,10 @@ export default function AdminPropertiesScreen() {
               <View key={item.id} style={styles.card}>
                 <Text style={styles.name}>{item.title}</Text>
                 <Text style={styles.meta}>
-                  {item.referenceCode} · {item.cityName} · {item.priceCurrency}{' '}
+                  {t(TYPE_LABEL_KEYS[item.propertyType])} · {item.cityName} · {item.priceCurrency}{' '}
                   {(item.priceAmount / 100).toLocaleString()}
                 </Text>
+                <Text style={styles.reference}>{item.referenceCode}</Text>
                 <Text style={styles.meta}>{t(STATUS_LABELS[item.publicationStatus])}</Text>
 
                 <Pressable onPress={() => void toggleMedia(item.id)} accessibilityRole="button" style={styles.mediaToggle}>
@@ -294,9 +285,7 @@ export default function AdminPropertiesScreen() {
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.background },
   content: { paddingHorizontal: t.spacing.screenHorizontal, gap: t.spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.smd },
-  title: { flex: 1, textAlign: 'center', ...t.typography.h3, color: t.colors.text },
-  spacer: { width: 40 },
+  title: { ...t.typography.h2, color: t.colors.text },
   tabs: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   tab: {
     paddingHorizontal: 10,
@@ -320,6 +309,7 @@ const useStyles = makeStyles((t) => ({
   actions: { flexDirection: 'row', gap: t.spacing.sm },
   name: { ...t.typography.bodyBold, color: t.colors.text },
   meta: { ...t.typography.caption, color: t.colors.textSecondary },
+  reference: { ...t.typography.tiny, color: t.colors.textMuted },
   mediaToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
   mediaToggleText: { ...t.typography.caption, color: t.colors.accent },
   mediaCount: { ...t.typography.tiny, color: t.colors.textMuted },

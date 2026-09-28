@@ -891,6 +891,100 @@ const en = {
   couldNotDeleteAccount: "Could not delete account",
   deleteAccountBlockedNote: "Some accounts cannot be deleted from the app — for example the sole owner of a partner that still has live listings. Contact Mizan Invest and we will help.",
   photoTooLarge: "Choose an image under 5 MB.",
+
+  // ----------------------------------------
+  // PROPERTY FORM — TYPE-DRIVEN FIELDS
+  // ----------------------------------------
+  fieldAreaApartment: "Area (m²)",
+  fieldAreaVilla: "Built area (m²)",
+  fieldAreaLand: "Plot area (m²)",
+  fieldAreaCommercial: "Usable area (m²)",
+  highlights: "Highlights",
+  highlightsNote: "Short selling points shown on the listing. Do not include phone numbers or email addresses.",
+  highlightsHintApartment: "e.g. Corner unit, 12th floor, city view",
+  highlightsHintVilla: "e.g. Private pool, corner plot, maid's room",
+  highlightsHintLand: "e.g. Residential zoning, 20 m frontage, utilities connected",
+  highlightsHintCommercial: "e.g. Ground floor, 3 floors, fitted office",
+  addHighlight: "Add highlight",
+  highlightContainsContact: "Remove phone numbers and email addresses from highlights.",
+  basicsSection: "Basics",
+  detailsSection: "Details",
+  pricingSection: "Pricing",
+  locationSection: "Location",
+  saveAndContinue: "Save and continue",
+  draftSavedContinue: "Draft saved. You can add media and submit it for review now.",
+  mediaAfterSaveNote: "Photos and video can be added once the draft is saved.",
+  pendingReviewLocked: "This listing is with Mizan for review. Fields are locked until a decision.",
+  publishedLocked: "This listing is live. Contact Mizan Invest to change a published listing.",
+
+  // ----------------------------------------
+  // PARTNER WORKSPACE
+  // ----------------------------------------
+  partnerWorkspace: "Partner",
+  dashboardTab: "Dashboard",
+  addTab: "Add",
+  viewAsInvestor: "View Mizan as Investor",
+  viewAsInvestorNote: "Opens the customer app. Return any time from Settings or Profile.",
+  backToPartnerWorkspace: "Back to Partner workspace",
+  backToAdminWorkspace: "Back to Mizan Management",
+  // ----------------------------------------
+  // PARTNER DASHBOARD METRICS
+  // ----------------------------------------
+  totalProperties: "Total properties",
+  draftsCount: "Drafts",
+  pendingReviewCount: "Pending review",
+  publishedCount: "Published",
+  needsChangesCount: "Needs changes",
+  couldNotLoadDashboard: "Could not load your dashboard.",
+  quickActions: "Quick actions",
+  noPropertiesYetDashboard: "You have no listings yet. Add your first property to get started.",
+  // ----------------------------------------
+  // PARTNER PROPERTY LIST
+  // ----------------------------------------
+  filterAll: "All",
+  noPropertiesForFilter: "No listings in this view.",
+  editListing: "Edit",
+  fixAndResubmit: "Fix and resubmit",
+  liveLabel: "Live",
+  awaitingReview: "Awaiting Mizan review",
+  // ----------------------------------------
+  // PARTNER MEMBERSHIP EDGE CASE
+  // ----------------------------------------
+  partnerAccessPending: "Partner access not active yet",
+  partnerAccessPendingBody: "Your partner role is approved, but your account is not linked to a partner organisation yet. Mizan Invest completes this step — contact us if it takes longer than expected.",
+  continueToInvestorApp: "Continue to Mizan",
+
+  // ----------------------------------------
+  // ADMIN WORKSPACE
+  // ----------------------------------------
+  adminWorkspace: "Management",
+  reviewQueue: "Review queue",
+  awaitingReviewCount: "Awaiting review",
+  activePartnersCount: "Active partners",
+  pendingApplicationsCount: "Pending applications",
+  newLeadsCount: "New leads",
+  totalLeadsCount: "Total leads",
+  couldNotLoadCounts: "Could not load management data.",
+  viewActivity: "Activity log",
+  // ----------------------------------------
+  // ADMIN LEADS
+  // ----------------------------------------
+  leadsTitle: "Leads",
+  noLeads: "No leads yet.",
+  couldNotLoadLeads: "Could not load leads.",
+  leadStatusNew: "New",
+  leadStatusContacted: "Contacted",
+  leadStatusQualified: "Qualified",
+  leadStatusMatched: "Matched to partner",
+  leadStatusClosedWon: "Closed — won",
+  leadStatusClosedLost: "Closed — lost",
+  leadStatusSpam: "Spam",
+  changeStatus: "Change status",
+  leadStatusUpdated: "Lead status updated",
+  couldNotUpdateLead: "Could not update the lead",
+  leadContact: "Customer contact",
+  leadAbout: "Enquiry about",
+  leadsReadOnlyNote: "Attribution is frozen at creation and cannot be edited. Leads cannot be deleted; use Spam instead.",
 } as const;
 
 /**
@@ -1621,6 +1715,100 @@ const tr: TranslationDictionary = {
   couldNotDeleteAccount: "Hesap silinemedi",
   deleteAccountBlockedNote: "Bazı hesaplar uygulamadan silinemez; örneğin hâlâ yayında ilanı olan bir partnerin tek sahibi. Mizan Invest ile iletişime geçin, yardımcı olalım.",
   photoTooLarge: "5 MB'den küçük bir görsel seçin.",
+
+  // ----------------------------------------
+  // PROPERTY FORM — TYPE-DRIVEN FIELDS
+  // ----------------------------------------
+  fieldAreaApartment: "Alan (m²)",
+  fieldAreaVilla: "Kapalı alan (m²)",
+  fieldAreaLand: "Arsa alanı (m²)",
+  fieldAreaCommercial: "Kullanılabilir alan (m²)",
+  highlights: "Öne çıkanlar",
+  highlightsNote: "İlanda gösterilen kısa satış noktaları. Telefon numarası veya e-posta adresi eklemeyin.",
+  highlightsHintApartment: "örn. Köşe daire, 12. kat, şehir manzarası",
+  highlightsHintVilla: "örn. Özel havuz, köşe parsel, hizmetli odası",
+  highlightsHintLand: "örn. Konut imarı, 20 m cephe, altyapı bağlı",
+  highlightsHintCommercial: "örn. Zemin kat, 3 kat, hazır ofis",
+  addHighlight: "Öne çıkan ekle",
+  highlightContainsContact: "Öne çıkanlardan telefon numaralarını ve e-posta adreslerini kaldırın.",
+  basicsSection: "Temel bilgiler",
+  detailsSection: "Detaylar",
+  pricingSection: "Fiyatlandırma",
+  locationSection: "Konum",
+  saveAndContinue: "Kaydet ve devam et",
+  draftSavedContinue: "Taslak kaydedildi. Şimdi medya ekleyip incelemeye gönderebilirsiniz.",
+  mediaAfterSaveNote: "Fotoğraf ve video, taslak kaydedildikten sonra eklenebilir.",
+  pendingReviewLocked: "Bu ilan Mizan incelemesinde. Karar verilene kadar alanlar kilitli.",
+  publishedLocked: "Bu ilan yayında. Yayındaki bir ilanı değiştirmek için Mizan Invest ile iletişime geçin.",
+
+  // ----------------------------------------
+  // PARTNER WORKSPACE
+  // ----------------------------------------
+  partnerWorkspace: "Partner",
+  dashboardTab: "Panel",
+  addTab: "Ekle",
+  viewAsInvestor: "Mizan'ı yatırımcı olarak görüntüle",
+  viewAsInvestorNote: "Müşteri uygulamasını açar. Ayarlar veya Profil'den istediğiniz zaman dönebilirsiniz.",
+  backToPartnerWorkspace: "Partner çalışma alanına dön",
+  backToAdminWorkspace: "Mizan Yönetimi'ne dön",
+  // ----------------------------------------
+  // PARTNER DASHBOARD METRICS
+  // ----------------------------------------
+  totalProperties: "Toplam mülk",
+  draftsCount: "Taslaklar",
+  pendingReviewCount: "İnceleme bekliyor",
+  publishedCount: "Yayında",
+  needsChangesCount: "Düzeltme gerekli",
+  couldNotLoadDashboard: "Paneliniz yüklenemedi.",
+  quickActions: "Hızlı işlemler",
+  noPropertiesYetDashboard: "Henüz ilanınız yok. Başlamak için ilk mülkünüzü ekleyin.",
+  // ----------------------------------------
+  // PARTNER PROPERTY LIST
+  // ----------------------------------------
+  filterAll: "Tümü",
+  noPropertiesForFilter: "Bu görünümde ilan yok.",
+  editListing: "Düzenle",
+  fixAndResubmit: "Düzelt ve yeniden gönder",
+  liveLabel: "Yayında",
+  awaitingReview: "Mizan incelemesi bekleniyor",
+  // ----------------------------------------
+  // PARTNER MEMBERSHIP EDGE CASE
+  // ----------------------------------------
+  partnerAccessPending: "Partner erişimi henüz aktif değil",
+  partnerAccessPendingBody: "Partner rolünüz onaylandı ancak hesabınız henüz bir partner kuruluşuna bağlanmadı. Bu adımı Mizan Invest tamamlar — beklenenden uzun sürerse bizimle iletişime geçin.",
+  continueToInvestorApp: "Mizan'a devam et",
+
+  // ----------------------------------------
+  // ADMIN WORKSPACE
+  // ----------------------------------------
+  adminWorkspace: "Yönetim",
+  reviewQueue: "İnceleme kuyruğu",
+  awaitingReviewCount: "İnceleme bekliyor",
+  activePartnersCount: "Aktif partnerler",
+  pendingApplicationsCount: "Bekleyen başvurular",
+  newLeadsCount: "Yeni talepler",
+  totalLeadsCount: "Toplam talep",
+  couldNotLoadCounts: "Yönetim verileri yüklenemedi.",
+  viewActivity: "Etkinlik kaydı",
+  // ----------------------------------------
+  // ADMIN LEADS
+  // ----------------------------------------
+  leadsTitle: "Talepler",
+  noLeads: "Henüz talep yok.",
+  couldNotLoadLeads: "Talepler yüklenemedi.",
+  leadStatusNew: "Yeni",
+  leadStatusContacted: "İletişim kuruldu",
+  leadStatusQualified: "Nitelikli",
+  leadStatusMatched: "Partnere eşleştirildi",
+  leadStatusClosedWon: "Kapandı — kazanıldı",
+  leadStatusClosedLost: "Kapandı — kaybedildi",
+  leadStatusSpam: "Spam",
+  changeStatus: "Durumu değiştir",
+  leadStatusUpdated: "Talep durumu güncellendi",
+  couldNotUpdateLead: "Talep güncellenemedi",
+  leadContact: "Müşteri iletişimi",
+  leadAbout: "İlgili ilan",
+  leadsReadOnlyNote: "Atıf bilgileri oluşturulduğunda dondurulur ve düzenlenemez. Talepler silinemez; bunun yerine Spam kullanın.",
 };
 
 // ============================================
@@ -2337,6 +2525,100 @@ const ru: TranslationDictionary = {
   couldNotDeleteAccount: "Не удалось удалить аккаунт",
   deleteAccountBlockedNote: "Некоторые аккаунты нельзя удалить из приложения — например, единственный владелец партнёра с активными объектами. Свяжитесь с Mizan Invest, и мы поможем.",
   photoTooLarge: "Выберите изображение меньше 5 МБ.",
+
+  // ----------------------------------------
+  // PROPERTY FORM — TYPE-DRIVEN FIELDS
+  // ----------------------------------------
+  fieldAreaApartment: "Площадь (м²)",
+  fieldAreaVilla: "Застроенная площадь (м²)",
+  fieldAreaLand: "Площадь участка (м²)",
+  fieldAreaCommercial: "Полезная площадь (м²)",
+  highlights: "Ключевые особенности",
+  highlightsNote: "Краткие преимущества, показываемые в объявлении. Не указывайте телефоны и адреса электронной почты.",
+  highlightsHintApartment: "напр. Угловая квартира, 12 этаж, вид на город",
+  highlightsHintVilla: "напр. Собственный бассейн, угловой участок, комната персонала",
+  highlightsHintLand: "напр. Жилое зонирование, фасад 20 м, коммуникации подведены",
+  highlightsHintCommercial: "напр. Первый этаж, 3 этажа, готовый офис",
+  addHighlight: "Добавить особенность",
+  highlightContainsContact: "Удалите телефоны и адреса электронной почты из особенностей.",
+  basicsSection: "Основное",
+  detailsSection: "Детали",
+  pricingSection: "Цена",
+  locationSection: "Местоположение",
+  saveAndContinue: "Сохранить и продолжить",
+  draftSavedContinue: "Черновик сохранён. Теперь можно добавить медиа и отправить на проверку.",
+  mediaAfterSaveNote: "Фото и видео можно добавить после сохранения черновика.",
+  pendingReviewLocked: "Объявление на проверке в Mizan. Поля заблокированы до решения.",
+  publishedLocked: "Объявление опубликовано. Для изменений свяжитесь с Mizan Invest.",
+
+  // ----------------------------------------
+  // PARTNER WORKSPACE
+  // ----------------------------------------
+  partnerWorkspace: "Партнёр",
+  dashboardTab: "Панель",
+  addTab: "Добавить",
+  viewAsInvestor: "Смотреть Mizan как инвестор",
+  viewAsInvestorNote: "Открывает клиентское приложение. Вернуться можно в любой момент из Настроек или Профиля.",
+  backToPartnerWorkspace: "Вернуться в рабочее пространство партнёра",
+  backToAdminWorkspace: "Вернуться в Mizan Management",
+  // ----------------------------------------
+  // PARTNER DASHBOARD METRICS
+  // ----------------------------------------
+  totalProperties: "Всего объектов",
+  draftsCount: "Черновики",
+  pendingReviewCount: "На проверке",
+  publishedCount: "Опубликовано",
+  needsChangesCount: "Требуют изменений",
+  couldNotLoadDashboard: "Не удалось загрузить панель.",
+  quickActions: "Быстрые действия",
+  noPropertiesYetDashboard: "У вас пока нет объявлений. Добавьте первый объект, чтобы начать.",
+  // ----------------------------------------
+  // PARTNER PROPERTY LIST
+  // ----------------------------------------
+  filterAll: "Все",
+  noPropertiesForFilter: "В этом разделе нет объявлений.",
+  editListing: "Изменить",
+  fixAndResubmit: "Исправить и отправить",
+  liveLabel: "Опубликовано",
+  awaitingReview: "Ожидает проверки Mizan",
+  // ----------------------------------------
+  // PARTNER MEMBERSHIP EDGE CASE
+  // ----------------------------------------
+  partnerAccessPending: "Партнёрский доступ ещё не активен",
+  partnerAccessPendingBody: "Ваша партнёрская роль одобрена, но аккаунт ещё не связан с партнёрской организацией. Этот шаг завершает Mizan Invest — свяжитесь с нами, если это займёт больше времени.",
+  continueToInvestorApp: "Перейти в Mizan",
+
+  // ----------------------------------------
+  // ADMIN WORKSPACE
+  // ----------------------------------------
+  adminWorkspace: "Управление",
+  reviewQueue: "Очередь проверки",
+  awaitingReviewCount: "Ожидают проверки",
+  activePartnersCount: "Активные партнёры",
+  pendingApplicationsCount: "Заявки на рассмотрении",
+  newLeadsCount: "Новые заявки",
+  totalLeadsCount: "Всего заявок",
+  couldNotLoadCounts: "Не удалось загрузить данные управления.",
+  viewActivity: "Журнал активности",
+  // ----------------------------------------
+  // ADMIN LEADS
+  // ----------------------------------------
+  leadsTitle: "Заявки",
+  noLeads: "Заявок пока нет.",
+  couldNotLoadLeads: "Не удалось загрузить заявки.",
+  leadStatusNew: "Новая",
+  leadStatusContacted: "Связались",
+  leadStatusQualified: "Квалифицирована",
+  leadStatusMatched: "Передана партнёру",
+  leadStatusClosedWon: "Закрыта — успешно",
+  leadStatusClosedLost: "Закрыта — неуспешно",
+  leadStatusSpam: "Спам",
+  changeStatus: "Изменить статус",
+  leadStatusUpdated: "Статус заявки обновлён",
+  couldNotUpdateLead: "Не удалось обновить заявку",
+  leadContact: "Контакт клиента",
+  leadAbout: "Запрос по объекту",
+  leadsReadOnlyNote: "Данные атрибуции фиксируются при создании и не редактируются. Заявки нельзя удалить — используйте «Спам».",
 };
 
 // ============================================
@@ -3047,6 +3329,100 @@ const ar: TranslationDictionary = {
   couldNotDeleteAccount: "تعذر حذف الحساب",
   deleteAccountBlockedNote: "لا يمكن حذف بعض الحسابات من التطبيق — مثل المالك الوحيد لشريك لا يزال لديه إعلانات منشورة. تواصل مع ميزان إنفست وسنساعدك.",
   photoTooLarge: "اختر صورة أقل من 5 ميجابايت.",
+
+  // ----------------------------------------
+  // PROPERTY FORM — TYPE-DRIVEN FIELDS
+  // ----------------------------------------
+  fieldAreaApartment: "المساحة (م²)",
+  fieldAreaVilla: "المساحة المبنية (م²)",
+  fieldAreaLand: "مساحة الأرض (م²)",
+  fieldAreaCommercial: "المساحة القابلة للاستخدام (م²)",
+  highlights: "أبرز المميزات",
+  highlightsNote: "نقاط بيع قصيرة تظهر في الإعلان. لا تُضف أرقام هواتف أو عناوين بريد إلكتروني.",
+  highlightsHintApartment: "مثال: شقة زاوية، الطابق 12، إطلالة على المدينة",
+  highlightsHintVilla: "مثال: مسبح خاص، قطعة زاوية، غرفة خادمة",
+  highlightsHintLand: "مثال: تصنيف سكني، واجهة 20 م، الخدمات متصلة",
+  highlightsHintCommercial: "مثال: الطابق الأرضي، 3 طوابق، مكتب مجهز",
+  addHighlight: "إضافة ميزة",
+  highlightContainsContact: "أزل أرقام الهواتف وعناوين البريد الإلكتروني من المميزات.",
+  basicsSection: "الأساسيات",
+  detailsSection: "التفاصيل",
+  pricingSection: "التسعير",
+  locationSection: "الموقع",
+  saveAndContinue: "حفظ ومتابعة",
+  draftSavedContinue: "تم حفظ المسودة. يمكنك الآن إضافة الوسائط وإرسالها للمراجعة.",
+  mediaAfterSaveNote: "يمكن إضافة الصور والفيديو بعد حفظ المسودة.",
+  pendingReviewLocked: "هذا الإعلان قيد مراجعة ميزان. الحقول مقفلة حتى صدور القرار.",
+  publishedLocked: "هذا الإعلان منشور. تواصل مع ميزان إنفست لتعديل إعلان منشور.",
+
+  // ----------------------------------------
+  // PARTNER WORKSPACE
+  // ----------------------------------------
+  partnerWorkspace: "الشريك",
+  dashboardTab: "لوحة التحكم",
+  addTab: "إضافة",
+  viewAsInvestor: "عرض ميزان كمستثمر",
+  viewAsInvestorNote: "يفتح تطبيق العملاء. يمكنك العودة في أي وقت من الإعدادات أو الملف الشخصي.",
+  backToPartnerWorkspace: "العودة إلى مساحة عمل الشريك",
+  backToAdminWorkspace: "العودة إلى إدارة ميزان",
+  // ----------------------------------------
+  // PARTNER DASHBOARD METRICS
+  // ----------------------------------------
+  totalProperties: "إجمالي العقارات",
+  draftsCount: "المسودات",
+  pendingReviewCount: "قيد المراجعة",
+  publishedCount: "منشور",
+  needsChangesCount: "تحتاج تعديلات",
+  couldNotLoadDashboard: "تعذر تحميل لوحة التحكم.",
+  quickActions: "إجراءات سريعة",
+  noPropertiesYetDashboard: "ليس لديك إعلانات بعد. أضف عقارك الأول للبدء.",
+  // ----------------------------------------
+  // PARTNER PROPERTY LIST
+  // ----------------------------------------
+  filterAll: "الكل",
+  noPropertiesForFilter: "لا توجد إعلانات في هذا العرض.",
+  editListing: "تعديل",
+  fixAndResubmit: "صحّح وأعد الإرسال",
+  liveLabel: "منشور",
+  awaitingReview: "بانتظار مراجعة ميزان",
+  // ----------------------------------------
+  // PARTNER MEMBERSHIP EDGE CASE
+  // ----------------------------------------
+  partnerAccessPending: "وصول الشريك غير مفعل بعد",
+  partnerAccessPendingBody: "تمت الموافقة على دور الشريك، لكن حسابك غير مرتبط بعد بمؤسسة شريكة. تكمل ميزان إنفست هذه الخطوة — تواصل معنا إذا استغرق الأمر وقتاً أطول.",
+  continueToInvestorApp: "المتابعة إلى ميزان",
+
+  // ----------------------------------------
+  // ADMIN WORKSPACE
+  // ----------------------------------------
+  adminWorkspace: "الإدارة",
+  reviewQueue: "قائمة المراجعة",
+  awaitingReviewCount: "بانتظار المراجعة",
+  activePartnersCount: "الشركاء النشطون",
+  pendingApplicationsCount: "الطلبات المعلقة",
+  newLeadsCount: "طلبات جديدة",
+  totalLeadsCount: "إجمالي الطلبات",
+  couldNotLoadCounts: "تعذر تحميل بيانات الإدارة.",
+  viewActivity: "سجل النشاط",
+  // ----------------------------------------
+  // ADMIN LEADS
+  // ----------------------------------------
+  leadsTitle: "الطلبات",
+  noLeads: "لا توجد طلبات بعد.",
+  couldNotLoadLeads: "تعذر تحميل الطلبات.",
+  leadStatusNew: "جديد",
+  leadStatusContacted: "تم التواصل",
+  leadStatusQualified: "مؤهل",
+  leadStatusMatched: "تمت المطابقة مع شريك",
+  leadStatusClosedWon: "مغلق — ناجح",
+  leadStatusClosedLost: "مغلق — غير ناجح",
+  leadStatusSpam: "بريد مزعج",
+  changeStatus: "تغيير الحالة",
+  leadStatusUpdated: "تم تحديث حالة الطلب",
+  couldNotUpdateLead: "تعذر تحديث الطلب",
+  leadContact: "بيانات تواصل العميل",
+  leadAbout: "استفسار بخصوص",
+  leadsReadOnlyNote: "تُجمّد بيانات الإسناد عند الإنشاء ولا يمكن تعديلها. لا يمكن حذف الطلبات؛ استخدم البريد المزعج بدلاً من ذلك.",
 };
 
 /**

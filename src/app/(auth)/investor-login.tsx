@@ -38,7 +38,7 @@ import { AppIcon, Button, IconButton, LogoMark } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOrHome } from '@/lib/navigation';
+import { goBackOrHome, landingRouteForRole } from '@/lib/navigation';
 
 export default function InvestorLoginScreen() {
   const styles = useStyles();
@@ -74,7 +74,10 @@ export default function InvestorLoginScreen() {
       return;
     }
 
-    router.replace('/(main)/home');
+    // Landing follows the role the server just granted, not this screen.
+    // `result.identity` is used rather than the context values, which are
+    // still the pre-sign-in ones during this handler.
+    router.replace(landingRouteForRole(result.identity));
   };
 
   return (

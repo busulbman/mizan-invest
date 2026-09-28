@@ -52,7 +52,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { count: favoriteCount } = useFavorites();
   const { unreadCount } = useNotifications();
-  const { isAuthenticated, isPartner, profile, signOut, user } = useAuth();
+  const { isAdmin, isAuthenticated, isPartner, profile, signOut, user } = useAuth();
 
   // Legal and support pages are outside the demo's scope; say so
   // explicitly rather than leaving a row that does nothing.
@@ -217,6 +217,23 @@ export default function ProfileScreen() {
         {/* ---------------------------------------- */}
         {/* PARTNER PORTAL */}
         {/* ---------------------------------------- */}
+        {isAdmin && (
+          <Animated.View entering={FadeInDown.delay(170)} style={styles.section}>
+            <Text style={styles.sectionLabel} numberOfLines={1}>{t('mizanManagement')}</Text>
+            <Pressable
+              onPress={() => router.push('/(admin)/dashboard')}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.partnerCard, pressed && styles.pressed]}
+            >
+              <View style={styles.partnerIcon}><AppIcon name="analytics" size="md" color={colors.accent} /></View>
+              <View style={styles.linkText}>
+                <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">{t('backToAdminWorkspace')}</Text>
+              </View>
+              <AppIcon name="arrowForward" size="sm" color={colors.onDarkMuted} />
+            </Pressable>
+          </Animated.View>
+        )}
+
         {isPartner && (
           <Animated.View entering={FadeInDown.delay(180)} style={styles.section}>
             <Text style={styles.sectionLabel} numberOfLines={1}>{t('forPartners')}</Text>
@@ -227,7 +244,7 @@ export default function ProfileScreen() {
             >
               <View style={styles.partnerIcon}><AppIcon name="building" size="md" color={colors.accent} /></View>
               <View style={styles.linkText}>
-                <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">{t('partnerPortalAccess')}</Text>
+                <Text style={styles.partnerTitle} numberOfLines={1} ellipsizeMode="tail">{t('backToPartnerWorkspace')}</Text>
                 <Text style={styles.partnerSub} numberOfLines={2} ellipsizeMode="tail">{t('partnerPortalDescription')}</Text>
               </View>
               <AppIcon name="arrowForward" size="sm" color={colors.onDarkMuted} />

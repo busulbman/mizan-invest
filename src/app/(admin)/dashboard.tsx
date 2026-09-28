@@ -1,108 +1,172 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+/**
+ * ============================================
+ * MIZAN MANAGEMENT — DASHBOARD
+ * ============================================
+ *
+ * Real counts only, read through admin RLS.
+ *
+ * NO DEAD ROWS
+ * The previous version listed six sections, three of which routed nowhere —
+ * they highlighted on press and did nothing. Every destination here exists and
+ * works; Activity is a secondary route rather than a tab because it is an
+ * occasional audit lookup, not a daily surface.
+ *
+ * A failed read shows an error with Retry, never zeros: "0 awaiting review"
+ * would be indistinguishable from an empty queue, and an admin would stop
+ * checking a queue that was actually full.
+ */
 
-import { AppIcon, Button, IconButton } from '@/components/ui';
-import { getAdminDashboardCounts, type AdminDashboardCounts } from '@/lib/admin';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppIcon, Button } from '@/components/ui';
 import type { TranslationKey } from '@/constants/translations';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOr } from '@/lib/navigation';
+import { getAdminDashboardCounts, type AdminDashboardCounts } from '@/lib/admin';
 
-/**
- * Section ids are stable and never user-visible; the label beside each one is
- * a translation key so the menu reads in the user's language.
- */
-const SECTIONS = ['dashboard', 'properties', 'partners', 'leads', 'content', 'activity'] as const;
+type AdminRoute = '/(admin)/properties' | '/(admin)/partners' | '/(admin)/leads';
 
-type AdminSection = (typeof SECTIONS)[number];
-
-const SECTION_LABELS: Record<AdminSection, TranslationKey> = {
-  dashboard: 'adminDashboard',
-  properties: 'propertiesTitle',
-  partners: 'partners',
-  leads: 'leads',
-  content: 'contentSection',
-  activity: 'activitySection',
-};
-
-function sectionRoute(section: AdminSection) {
-  if (section === 'properties') return '/(admin)/properties';
-  if (section === 'partners') return '/(admin)/partners';
-  if (section === 'activity') return '/(admin)/activity';
-  return null;
+interface MetricCard {
+  key: keyof AdminDashboardCounts;
+  labelKey: TranslationKey;
+  route: AdminRoute;
+  tone: 'neutral' | 'info' | 'success' | 'warning';
 }
+
+const CARDS: MetricCard[] = [
+  { key: 'pendingProperties', labelKey: 'awaitingReviewCount', route: '/(admin)/properties', tone: 'warning' },
+  { key: 'publishedProperties', labelKey: 'publishedCount', route: '/(admin)/properties', tone: 'success' },
+  { key: 'pendingApplications', labelKey: 'pendingApplicationsCount', route: '/(admin)/partners', tone: 'info' },
+  { key: 'activePartners', labelKey: 'activePartnersCount', route: '/(admin)/partners', tone: 'neutral' },
+  { key: 'newLeads', labelKey: 'newLeadsCount', route: '/(admin)/leads', tone: 'info' },
+  { key: 'totalLeads', labelKey: 'totalLeadsCount', route: '/(admin)/leads', tone: 'neutral' },
+];
 
 export default function AdminDashboardScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+
   const [counts, setCounts] = useState<AdminDashboardCounts | null>(null);
-  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+    setFailed(false);
     try {
       setCounts(await getAdminDashboardCounts());
     } catch {
-      // Do not substitute made-up management numbers when an RLS/network read
-      // cannot complete.
+      // Never substitute invented management numbers for a failed read.
       setCounts(null);
-      setError(true);
+      setFailed(true);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
-  const metrics = counts
-    ? [
-        [t('publishedProperties'), counts.publishedProperties],
-        [t('pendingProperties'), counts.pendingProperties],
-        [t('partners'), counts.partners],
-        [t('leads'), counts.leads],
-      ] as const
-    : [];
+  const toneColor = {
+    neutral: colors.textSecondary,
+    info: colors.info,
+    success: colors.success,
+    warning: colors.warning,
+  };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 28 }]} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeIn} style={styles.header}>
-          <IconButton icon="back" onPress={() => goBackOr('/(main)/settings')} accessibilityLabel={t('back')} variant="surface" size={44} />
-          <Text style={styles.title}>{t('mizanManagement')}</Text>
-          <View style={styles.headerSpacer} />
-        </Animated.View>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              void load();
+            }}
+            tintColor={colors.accent}
+          />
+        }
+      >
+        <Text style={styles.eyebrow}>{t('adminWorkspace')}</Text>
+        <Text style={styles.title}>{t('mizanManagement')}</Text>
 
-        <Animated.View entering={FadeInDown.delay(80)} style={styles.section}>
-          <Text style={styles.heading}>{t('adminDashboard')}</Text>
-          {loading ? (
-            <View style={styles.state}><ActivityIndicator color={colors.accent} /></View>
-          ) : error ? (
-            <View style={styles.state}><Text style={styles.stateText}>{t('networkError')}</Text><Button title={t('tryAgain')} onPress={() => void load()} size="sm" variant="outline" fullWidth={false} /></View>
-          ) : (
-            <View style={styles.grid}>
-              {metrics.map(([label, value]) => <View key={label} style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>)}
-            </View>
-          )}
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(140)} style={styles.section}>
-          <View style={styles.group}>
-            {SECTIONS.map((section, index) => (
-              <Pressable key={section} accessibilityRole="button" onPress={() => { const route = sectionRoute(section); if (route) router.push(route); }} style={({ pressed }) => [styles.row, index > 0 && styles.divider, pressed && styles.pressed]}>
-                <AppIcon name={section === 'dashboard' ? 'analytics' : section === 'leads' ? 'message' : section === 'partners' ? 'building' : 'listings'} size="md" color={colors.accent} />
-                <Text style={styles.rowLabel}>{t(SECTION_LABELS[section])}</Text>
-                <AppIcon name="arrowForward" size="sm" color={colors.textMuted} />
-              </Pressable>
-            ))}
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={styles.loader} />
+        ) : failed || !counts ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>{t('couldNotLoadCounts')}</Text>
+            <Button title={t('tryAgain')} size="sm" variant="outline" fullWidth={false} onPress={() => void load()} />
           </View>
-        </Animated.View>
+        ) : (
+          <>
+            <View style={styles.grid}>
+              {CARDS.map((card) => {
+                const value = counts[card.key];
+                return (
+                  <Pressable
+                    key={String(card.key)}
+                    onPress={() => router.push(card.route)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t(card.labelKey)}: ${value}`}
+                    style={({ pressed }) => [styles.metric, pressed && styles.pressed]}
+                  >
+                    <Text style={[styles.metricValue, { color: toneColor[card.tone] }]}>{value}</Text>
+                    <Text style={styles.metricLabel} numberOfLines={2}>
+                      {t(card.labelKey)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {counts.pendingProperties > 0 ? (
+              <Pressable
+                onPress={() => router.push('/(admin)/properties')}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.alert, pressed && styles.pressed]}
+              >
+                <AppIcon name="time" size="sm" color={colors.warning} />
+                <Text style={styles.alertText} numberOfLines={2}>
+                  {t('reviewQueue')}
+                </Text>
+                <AppIcon name="arrowForward" size="xs" color={colors.warning} />
+              </Pressable>
+            ) : null}
+          </>
+        )}
+
+        <Text style={styles.section}>{t('quickActions')}</Text>
+        <View style={styles.actions}>
+          <Button
+            title={t('viewActivity')}
+            icon="time"
+            variant="secondary"
+            size="lg"
+            onPress={() => router.push('/(admin)/activity')}
+          />
+          {/* Plain navigation into the customer app. No mode flag, no persisted
+              state; the way back is "Back to Mizan Management" in investor
+              Profile and Settings. */}
+          <Button
+            title={t('viewAsInvestor')}
+            icon="home"
+            variant="secondary"
+            size="lg"
+            onPress={() => router.push('/(main)/home')}
+          />
+        </View>
+        <Text style={styles.note}>{t('viewAsInvestorNote')}</Text>
       </ScrollView>
     </View>
   );
@@ -110,21 +174,54 @@ export default function AdminDashboardScreen() {
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.background },
-  content: { paddingBottom: t.spacing.section },
-  header: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.smd, paddingHorizontal: t.spacing.screenHorizontal },
-  title: { flex: 1, minWidth: 0, ...t.typography.h3, color: t.colors.text, textAlign: 'center' },
-  headerSpacer: { width: 44 },
-  section: { marginTop: t.spacing.xl },
-  heading: { ...t.typography.label, color: t.colors.textSecondary, marginHorizontal: t.spacing.screenHorizontal, marginBottom: t.spacing.sm },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginHorizontal: t.spacing.screenHorizontal },
-  metric: { width: (t.metrics.screenWidth - t.spacing.screenHorizontal * 2 - t.spacing.sm) / 2, minHeight: 102, padding: t.spacing.md, borderRadius: t.borderRadius.xl, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border, justifyContent: 'space-between' },
-  metricValue: { ...t.typography.h1, color: t.colors.accent },
-  metricLabel: { ...t.typography.caption, color: t.colors.textSecondary },
-  state: { marginHorizontal: t.spacing.screenHorizontal, minHeight: 110, alignItems: 'center', justifyContent: 'center', gap: t.spacing.smd, borderRadius: t.borderRadius.xl, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border },
+  content: { paddingHorizontal: t.spacing.screenHorizontal, gap: t.spacing.sm },
+  eyebrow: { ...t.typography.tiny, color: t.colors.accent, textTransform: 'uppercase', letterSpacing: 0.8 },
+  title: { ...t.typography.h2, color: t.colors.text, marginBottom: t.spacing.md },
+  loader: { marginTop: t.spacing.xl },
+  stateCard: {
+    minHeight: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing.smd,
+    borderRadius: t.borderRadius.xl,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    padding: t.spacing.md,
+  },
   stateText: { ...t.typography.caption, color: t.colors.textSecondary, textAlign: 'center' },
-  group: { marginHorizontal: t.spacing.screenHorizontal, borderRadius: t.borderRadius.xl, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.smd, minHeight: 58, paddingHorizontal: t.spacing.cardPadding },
-  rowLabel: { flex: 1, minWidth: 0, ...t.typography.bodyBold, color: t.colors.text },
-  divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
+  metric: {
+    width: (t.metrics.screenWidth - t.spacing.screenHorizontal * 2 - t.spacing.sm) / 2,
+    minHeight: 92,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.xl,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    justifyContent: 'space-between',
+  },
+  metricValue: { ...t.typography.h1 },
+  metricLabel: { ...t.typography.caption, color: t.colors.textSecondary },
   pressed: { opacity: 0.72 },
+  alert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    marginTop: t.spacing.sm,
+    padding: t.spacing.md,
+    borderRadius: t.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: t.colors.warning,
+    backgroundColor: t.colors.surface,
+  },
+  alertText: { flex: 1, minWidth: 0, ...t.typography.caption, color: t.colors.text },
+  section: {
+    ...t.typography.label,
+    color: t.colors.textSecondary,
+    marginTop: t.spacing.xl,
+    marginBottom: t.spacing.xs,
+  },
+  actions: { gap: t.spacing.sm },
+  note: { ...t.typography.tiny, color: t.colors.textMuted, lineHeight: 16, marginTop: t.spacing.xs },
 }));

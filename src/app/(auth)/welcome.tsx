@@ -25,6 +25,7 @@ import { Images } from '@/constants/images';
 import { AppIcon, Badge, Button, LanguagePicker, LogoMark, RemoteImage } from '@/components/ui';
 import { useLanguage } from '@/context/LanguageContext';
 import { useMarket } from '@/context/MarketContext';
+import { useLandingRoute } from '@/lib/navigation';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
 
 export default function WelcomeScreen() {
@@ -32,6 +33,7 @@ export default function WelcomeScreen() {
   const { colors, gradients } = useTheme();
   const { t } = useLanguage();
   const { hasChosenMarket } = useMarket();
+  const landing = useLandingRoute();
   const insets = useSafeAreaInsets();
 
   return (
@@ -79,7 +81,7 @@ export default function WelcomeScreen() {
           <Animated.View entering={FadeInUp.delay(500).duration(600)} style={styles.actions}>
             <Button
               title={t('continueAsGuest')}
-              onPress={() => router.replace(hasChosenMarket ? '/(main)/home' : '/(auth)/market')}
+              onPress={() => router.replace(hasChosenMarket ? landing : '/(auth)/market')}
               variant="gold"
               size="lg"
             />

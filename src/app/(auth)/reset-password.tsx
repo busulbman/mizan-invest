@@ -8,12 +8,13 @@ import { AppIcon, Button, IconButton, LogoMark } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOrHome } from '@/lib/navigation';
+import { goBackOrHome, useLandingRoute } from '@/lib/navigation';
 
 export default function ResetPasswordScreen() {
   const styles = useStyles();
   const { colors, gradients } = useTheme();
   const { t } = useLanguage();
+  const landing = useLandingRoute();
   const { isAuthenticated, updatePassword } = useAuth();
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState('');
@@ -29,7 +30,7 @@ export default function ResetPasswordScreen() {
       Alert.alert(t('error'), error.message || t('authRequestFailed'));
       return;
     }
-    Alert.alert(t('success'), t('passwordUpdated'), [{ text: t('close'), onPress: () => router.replace('/(main)/home') }]);
+    Alert.alert(t('success'), t('passwordUpdated'), [{ text: t('close'), onPress: () => router.replace(landing) }]);
   };
 
   return (

@@ -36,7 +36,7 @@ import { AppIcon, Badge, Button, IconButton, LogoMark } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { makeStyles, useTheme } from '@/context/ThemeContext';
-import { goBackOrHome } from '@/lib/navigation';
+import { goBackOrHome, landingRouteForRole } from '@/lib/navigation';
 
 export default function PartnerLoginScreen() {
   const styles = useStyles();
@@ -53,15 +53,29 @@ export default function PartnerLoginScreen() {
   const handleLogin = async () => {
     if (!email.trim() || !password) return;
     setSubmitting(true);
-    const { error } = await signIn(email, password);
+    const { error, identity } = await signIn(email, password);
     setSubmitting(false);
     if (error) {
       Alert.alert(t('error'), error.message || t('authRequestFailed'));
       return;
     }
-    // The protected route validates the refreshed server role and membership.
-    // A regular customer is safely redirected to Home by that guard.
-    router.replace('/(partner)/dashboard');
+    // A partner role with no active membership is NOT an active partner, and
+    // that fail-closed reading is deliberate. Silently landing them in the
+    // customer app looks like a bug, so the state is explained instead. No
+    // membership is created and no authorization is relaxed — the person
+    // simply continues as a normal user until Mizan links the account.
+    if (identity.hasPartnerRoleWithoutMembership) {
+      Alert.alert(t('partnerAccessPending'), t('partnerAccessPendingBody'), [
+        { text: t('continueToInvestorApp'), onPress: () => router.replace('/(main)/home') },
+      ]);
+      return;
+    }
+
+    // Routed by the role the server granted, not by the fact that this is the
+    // partner screen. Previously this always pushed to the partner dashboard
+    // and let RoleGate bounce a non-partner back to Home — a visible
+    // flash through a workspace they were never entitled to.
+    router.replace(landingRouteForRole(identity));
   };
 
   return (

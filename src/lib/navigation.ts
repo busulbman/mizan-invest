@@ -38,6 +38,62 @@
 
 import { router } from 'expo-router';
 
+import { useAuth } from '@/context/AuthContext';
+
+/**
+ * ============================================
+ * ROLE-BASED LANDING
+ * ============================================
+ *
+ * Where an authenticated person belongs, decided by the role the SERVER
+ * granted them — never by which login screen they happened to open.
+ *
+ * Before this existed, landing was a property of the route you came from:
+ * `investor-login` always pushed to customer Home and `partner-login` always
+ * pushed to the Partner dashboard, while `splash` sent every authenticated
+ * user to customer Home on any cold start. An admin had no path that reached
+ * their own workspace, and a partner signing in through the investor screen
+ * landed in the customer app.
+ *
+ * PRIORITY: admin / super_admin > partner > user.
+ * `isAdmin` already covers both admin and super_admin.
+ *
+ * This is a CONVENIENCE, not a permission. RoleGate remains the authorization
+ * boundary and RLS remains the real one; routing someone here grants them
+ * nothing they could not already reach.
+ */
+export type LandingRoute = '/(admin)/dashboard' | '/(partner)/dashboard' | '/(main)/home';
+
+/** Identity flags this helper needs. Kept structural so a freshly resolved
+ *  sign-in result can be passed directly, without waiting for a re-render. */
+export interface LandingIdentity {
+  isAdmin: boolean;
+  isPartner: boolean;
+}
+
+export function landingRouteForRole(identity: LandingIdentity | null | undefined): LandingRoute {
+  if (!identity) return '/(main)/home';
+  if (identity.isAdmin) return '/(admin)/dashboard';
+  if (identity.isPartner) return '/(partner)/dashboard';
+  return '/(main)/home';
+}
+
+/**
+ * Landing route for the currently loaded identity.
+ *
+ * Safe against the wrong-workspace flash because the root layout holds every
+ * screen behind a placeholder until `isLoading` clears, so roles are already
+ * known by the time any screen that calls this can mount.
+ *
+ * Do NOT use this immediately after `signIn`/`signUp` in the same handler —
+ * the hook value is from the previous render and would still be the old role.
+ * Those call sites use the identity those functions return instead.
+ */
+export function useLandingRoute(): LandingRoute {
+  const { isAdmin, isPartner } = useAuth();
+  return landingRouteForRole({ isAdmin, isPartner });
+}
+
 /** Routes that may be used as a parent or a no-history fallback. */
 export type BackTarget =
   | '/(main)/home'

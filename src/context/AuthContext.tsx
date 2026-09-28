@@ -28,6 +28,39 @@ export interface PartnerMembership {
   memberRole: 'owner' | 'manager' | 'agent';
 }
 
+/**
+ * The authorization flags a caller needs the INSTANT a sign-in resolves.
+ *
+ * `signIn`/`signUp` return this because a component that awaits them still
+ * holds the previous render's `isAdmin`/`isPartner` — routing on those would
+ * send a partner or admin to the customer app for a frame. Shaped structurally
+ * so it can be handed straight to `landingRouteForRole` without this module
+ * importing navigation (which imports this one).
+ */
+export interface ResolvedIdentity {
+  isAdmin: boolean;
+  isPartner: boolean;
+  /** Approved partner role, but not linked to a partner organisation yet. */
+  hasPartnerRoleWithoutMembership: boolean;
+}
+
+const SIGNED_OUT_IDENTITY: ResolvedIdentity = {
+  isAdmin: false,
+  isPartner: false,
+  hasPartnerRoleWithoutMembership: false,
+};
+
+function toIdentity(roles: AppRole[], memberships: PartnerMembership[]): ResolvedIdentity {
+  const hasPartnerRole = roles.includes('partner');
+  return {
+    isAdmin: roles.includes('admin') || roles.includes('super_admin'),
+    // Both conditions are required, and that is the whole point: an approved
+    // role without a live membership grants nothing.
+    isPartner: hasPartnerRole && memberships.length > 0,
+    hasPartnerRoleWithoutMembership: hasPartnerRole && memberships.length === 0,
+  };
+}
+
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -37,10 +70,19 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isPartner: boolean;
+  /**
+   * Holds the `partner` role but has no ACTIVE partner_members row.
+   *
+   * Reported so the UI can explain the situation instead of bouncing the
+   * person somewhere confusing. It grants nothing: `isPartner` — the flag every
+   * guard and every RLS policy path actually depends on — stays false, which
+   * is the correct fail-closed reading of "approved role, no live membership".
+   */
+  hasPartnerRoleWithoutMembership: boolean;
   isLoading: boolean;
   refresh: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (input: { email: string; password: string; fullName?: string }) => Promise<{ needsEmailConfirmation: boolean; error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; identity: ResolvedIdentity }>;
+  signUp: (input: { email: string; password: string; fullName?: string }) => Promise<{ needsEmailConfirmation: boolean; error: Error | null; identity: ResolvedIdentity }>;
   signOut: () => Promise<{ error: Error | null }>;
   sendPasswordReset: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (password: string) => Promise<{ error: Error | null }>;
@@ -84,10 +126,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsLoading(false);
   }, []);
 
-  const loadIdentity = useCallback(async (nextSession: Session | null) => {
+  const loadIdentity = useCallback(async (nextSession: Session | null): Promise<ResolvedIdentity> => {
     if (!nextSession) {
       clearIdentity();
-      return;
+      return SIGNED_OUT_IDENTITY;
     }
 
     if (mountedRef.current) {
@@ -107,13 +149,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const result = await supabase.auth.getUser();
       if (result.error || !result.data.user) {
         clearIdentity();
-        return;
+        return SIGNED_OUT_IDENTITY;
       }
       userData = result.data;
     } catch (error) {
       console.warn('[auth] Could not verify the session; continuing signed out.', error);
       clearIdentity();
-      return;
+      return SIGNED_OUT_IDENTITY;
     }
 
     const authenticatedUser = userData.user;
@@ -152,7 +194,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setPartnerMemberships([]);
         setIsLoading(false);
       }
-      return;
+      // Fail closed: signed in, but no elevated role, so landing is the
+      // investor app rather than a workspace they may not be entitled to.
+      return SIGNED_OUT_IDENTITY;
     }
 
     // An authorization read error is fail-closed: the person remains signed
@@ -170,7 +214,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           memberRole: row.member_role as PartnerMembership['memberRole'],
         }));
 
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return toIdentity(nextRoles, nextMemberships);
 
     setUser(authenticatedUser);
     setSession(nextSession);
@@ -188,6 +232,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setRoles(nextRoles);
     setPartnerMemberships(nextMemberships);
     setIsLoading(false);
+
+    return toIdentity(nextRoles, nextMemberships);
   }, [clearIdentity]);
 
   const refresh = useCallback(async () => {
@@ -255,8 +301,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (!error) await loadIdentity(data.session);
-    return { error: error ? new Error(error.message) : null };
+    // The resolved identity is returned, not read from context: the caller's
+    // `isAdmin`/`isPartner` are still the pre-sign-in values at this point.
+    const identity = error ? SIGNED_OUT_IDENTITY : await loadIdentity(data.session);
+    return { error: error ? new Error(error.message) : null, identity };
   }, [loadIdentity]);
 
   const signUp = useCallback(async ({ email, password, fullName }: { email: string; password: string; fullName?: string }) => {
@@ -268,8 +316,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         emailRedirectTo: authRedirectUrl('auth-complete'),
       },
     });
-    if (!error && data.session) await loadIdentity(data.session);
-    return { needsEmailConfirmation: !error && !data.session, error: error ? new Error(error.message) : null };
+    const identity = !error && data.session ? await loadIdentity(data.session) : SIGNED_OUT_IDENTITY;
+    return {
+      needsEmailConfirmation: !error && !data.session,
+      error: error ? new Error(error.message) : null,
+      identity,
+    };
   }, [loadIdentity]);
 
   const signOut = useCallback(async () => {
@@ -301,6 +353,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAuthenticated: user !== null && session !== null,
       isAdmin,
       isPartner: roles.includes('partner') && partnerMemberships.length > 0,
+      hasPartnerRoleWithoutMembership: roles.includes('partner') && partnerMemberships.length === 0,
       isLoading,
       refresh,
       signIn,
